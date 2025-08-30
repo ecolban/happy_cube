@@ -3,7 +3,7 @@ from enum import Enum, auto
 from pads import Pads
 
 
-class Orientations(Enum):
+class Orientations(str, Enum):
     ID = auto()
     R1 = auto()
     R2 = auto()
@@ -19,11 +19,12 @@ class Orientations(Enum):
 
 class Piece:
 
-    def __init__(self, pad: Pads, index: int):
-        self._color = pad.name
+    def __init__(self, color: str, index: int):
+        self._color = color
         self._index = index
         self._orientation = Orientations.ID
-        m = [[int(c) for c in s] for s in pad.parse()[index].splitlines()]
+        pad = Pads[color].parse()[index]
+        m = [[int(c) for c in s] for s in pad.splitlines()]
         self._edge = tuple(m[0][:-1] + [r[-1] for r in m[:-1]] + m[-1][-1:0:-1] + [r[0] for r in m[-1:0:-1]])
 
     @property

@@ -1,11 +1,12 @@
 import re
 import time
-from collections import defaultdict
+from itertools import chain
+from random import shuffle
 from typing import Iterable
 
 from pads import Pads
 from pieces import Piece, Orientations
-from puzzles import Shapes, get_cubits, filter_pieces
+from shapes import Shapes, get_shape_slots, filter_pieces
 
 
 class Node:
@@ -63,55 +64,54 @@ class Problem:
         # self._tiles = tiles
         self._num_tiles = len(tiles)
         self._pieces = pieces
-        self._cubits = get_cubits(tiles)
+        self._slots = get_shape_slots(tiles)
         self._hints = hints
         self._row_mapping = {}
-        self._head = self.load_problem()
-        self._hints = hints
+        self._head = self._load_problem()
+        self._hints = hints or []
 
-    def get_matrix(self):
+    def _get_matrix(self):
 
-        row_id = 0
+        row_idx = 0
         rows = []
         ignored_tiles = set()
         ignored_pieces = set()
-        ignored_cubits = set()
+        ignored_slots = set()
         if self._hints:
             for tile, pc_color, pc_idx, orientation_str in self._hints:
                 ignored_tiles.add(tile)
                 ignored_pieces.add((pc_color, pc_idx))
-                piece = Piece(Pads[pc_color], pc_idx)
+                piece = Piece(pc_color, pc_idx)
                 piece.orientation = Orientations[orientation_str]
-                ignored_cubits |= {self._cubits[tile * 16 + i] for i, v in enumerate(piece.edge) if v == 1}
+                ignored_slots |= {self._slots[tile * 16 + i] for i, v in enumerate(piece.edge) if v == 1}
         tiles = [tile for tile in range(self._num_tiles) if tile not in ignored_tiles]
         pieces = [pc for pc in self._pieces if (pc.color, pc.index) not in ignored_pieces]
-        cubits = set(self._cubits) - ignored_cubits
-        cubit_map = {j: i for i, j in enumerate(cubits)}
-        columns = [True] * len(cubits) + [False] * len(pieces)
-        num_primary_cols = len(cubits)
+        slots = set(self._slots) - ignored_slots
+        slot_map = {j: i for i, j in enumerate(slots)}
+        columns = [True] * len(slots) + [False] * len(pieces)
         for tile in tiles:
-            for i, piece in enumerate(pieces):
+            for piece_column, piece in enumerate(pieces, start=len(slots)):
                 rows_for_piece = set()
                 for orientation in Orientations:
                     piece.orientation = orientation
-                    cubit_set = {self._cubits[tile * 16 + i] for i, v in enumerate(piece.edge) if v == 1}
-                    if not cubit_set <= cubits:
+                    slot_subset = {self._slots[tile * 16 + i] for i, cubit in enumerate(piece.edge) if cubit == 1}
+                    if not slot_subset <= slots:
                         continue
                     row = [0] * len(columns)
-                    for cubit in cubit_set:
-                        row[cubit_map[cubit]] = 1
-                    row[num_primary_cols + i] = 1
+                    for slot_column in slot_subset:
+                        row[slot_map[slot_column]] = 1
+                    row[piece_column] = 1
                     if tuple(row) in rows_for_piece:
                         continue
                     rows_for_piece.add(tuple(row))
                     rows.append(row)
-                    self._row_mapping[row_id] = (tile, piece, orientation)
-                    row_id += 1
+                    self._row_mapping[row_idx] = (tile, piece.color, piece.index, orientation.name)
+                    row_idx += 1
         return columns, rows
 
-    def load_problem(self):
+    def _load_problem(self):
 
-        columns, rows = self.get_matrix()
+        columns, rows = self._get_matrix()
         # Add column headers
         head = Head()
         left_node = head
@@ -177,70 +177,23 @@ class Problem:
                 selected_column = min((c for c in Node.row_iterator(self._head) if c.primary), key=lambda c: c.size)
             except ValueError:
                 # No more columns to cover; problem solved
-                yield sorted(self._row_mapping[node.row_idx] for node in solution)
+                yield sorted(chain(self._hints, (self._row_mapping[node.row_idx] for node in solution)))
             else:
                 if selected_column.size == 0:
                     # No rows left to cover selected_column; solution not found
                     return
-                Problem.cover(selected_column)
+                self.cover(selected_column)
                 for node in Node.column_iterator(selected_column):
                     solution.append(node)
                     for j in Node.row_iterator(node):
-                        Problem.cover(j.column)
+                        self.cover(j.column)
                     yield from search()
                     node = solution.pop()
                     for j in Node.row_iterator(node, reverse=True):
-                        Problem.uncover(j.column)
-                Problem.uncover(selected_column)
+                        self.uncover(j.column)
+                self.uncover(selected_column)
 
         return search()
-
-
-def check_solution(
-        tiles: list[tuple[int, int, int, int]],
-        pieces: set[tuple[str, int]],
-        solution: Iterable[tuple[int, str, int, str]],
-) -> bool:
-    res = True
-    covered_tiles = set(tile for tile, *_ in solution)
-    uncovered_tile = next((tile for tile, _ in enumerate(tiles) if tile not in covered_tiles), None)
-    if uncovered_tile:
-        print(f"Tile {uncovered_tile} has not been assigned any piece")
-        res = False
-    piece_assignment = defaultdict(list)
-    for tile, color, index, _ in solution:
-        piece_assignment[(color, index)].append(tile)
-    reused_piece = next((p for p, v in piece_assignment.items() if len(v) > 1), None)
-    if reused_piece:
-        print(f"Piece {reused_piece} is used more than once.")
-        res = False
-    cubits = get_cubits(tiles)
-    covered_cubits = defaultdict(list)
-    for tile, color, index, orientation in solution:
-        if (color, index) not in pieces:
-            print(f"The solution uses {(color, index)}, which is not in the pieces for this problem.")
-            res = False
-        try:
-            piece = Piece(Pads[color], index)
-            piece.orientation = Orientations[orientation]
-            for i, v in enumerate(piece.edge):
-                if v == 1:
-                    covered_cubits[cubits[16 * tile + i]].append((tile, color, index))
-        except (IndexError, KeyError):
-            res = False
-    uncovered_cubit = next((cubit for cubit in cubits if cubit not in covered_cubits), None)
-    if uncovered_cubit:
-        tile, i = divmod(uncovered_cubit, 16)
-        print(f"Cubit {i} of tile {tile} is not covered by any piece.")
-        res = False
-    collision = next((cubit for cubit, v in covered_cubits.items() if len(v) > 1), None)
-    if collision:
-        tile, i = divmod(collision, 16)
-        a = ' and '.join(f"piece {(color, index)} assigned to tile {tile}"
-                         for tile, color, index in covered_cubits[collision])
-        print(f"Cubit {i} of tile {tile} is covered by {a}")
-        res = False
-    return res
 
 
 def read_problem6_pieces():
@@ -254,12 +207,13 @@ def read_problem6_pieces():
 
 
 def solve(
-        tiles: list[tuple[int, int, int, int]],
-        pieces: list[Piece],
+        shape: list[tuple[int, int, int, int]],
+        pieces: list[tuple[str, int]],
         hints: list[tuple[int, str, int, str]] = None,
 ):
-    problem = Problem(tiles, pieces, hints)
-    return ([(tile, p.color, p.index, orientation.name) for tile, p, orientation in a] for a in problem.solve())
+    piece_objs = [Piece(color, index) for color, index in pieces]
+    problem = Problem(shape, piece_objs, hints)
+    return problem.solve()
 
 
 def print_solution(solution, hints=None):
@@ -271,14 +225,12 @@ def print_solution(solution, hints=None):
     for tile, color, index, orientation in solution:
         used_pieces.add((color, index))
         print(f'{tile}: {color}[{index}]')
-        p = Piece(Pads[color], index)
+        p = Piece(color, index)
         p.orientation = Orientations[orientation]
         print(p)
 
     unused_pieces = {(pad.name, i) for pad in Pads for i in range(6)} - used_pieces
     print(list(unused_pieces))
-    end = time.time()
-    return end
 
 
 def main():
@@ -288,7 +240,7 @@ def main():
         (3, 'BLUE', 4, 'R1'),
         (5, 'PURPLE', 4, 'F2')
     ]
-    shape = Shapes.SHAPE4
+    shape = Shapes.CUBE_2x2x2
     pad_pieces = [
         ('BLUE', 0), ('BLUE', 2), ('BLUE', 3), ('BLUE', 4), ('BLUE', 5),
         ('ORANGE', 0), ('ORANGE', 1), ('ORANGE', 2), ('ORANGE', 4), ('ORANGE', 5),
@@ -296,32 +248,41 @@ def main():
         ('RED', 0), ('RED', 2), ('RED', 3), ('RED', 4), ('RED', 5),
         ('YELLOW', 0), ('YELLOW', 1), ('YELLOW', 2), ('YELLOW', 3), ('YELLOW', 4), ('YELLOW', 5),
     ]
-    pieces = [Piece(Pads[color], index) for color, index in pad_pieces]
-    solution = next(solve(shape.tiles, pieces, hints))
-    end = print_solution(solution, hints)
-    print(f'Time = {int((end - start) * 1000)} ms')
+    solution = next(solve(shape.tiles, pad_pieces, hints))
+    print_solution(solution, hints)
+    print(f'Time = {int((time.time() - start) * 1000)} ms')
 
 
 def main2():
     start = time.time()
-    tiles = Shapes.SHAPE8.tiles
-    pieces = [Piece(pad, index) for pad in Pads for index in range(6)]
-    pieces = next(filter_pieces(tiles, pieces))
-    solution = next(solve(tiles, pieces))
-    end = print_solution(solution)
-    print(f'Time = {int((end - start) * 1000)} ms')
+    shape = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES.value
+    pieces = [(pad.name, idx) for pad in Pads for idx in range(6)]
+    shuffle(pieces)
+    filtered_pieces = filter_pieces(shape, pieces)
+    solution = next(s for s in (next(solve(shape, pcs), None) for pcs in filtered_pieces) if s is not None)
+    if solution:
+        print_solution(solution)
+    else:
+        print("No solution found!")
+    print(f'Time = {int((time.time() - start) * 1000)} ms')
 
 
 def main3():
     start = time.time()
-    shape = Shapes.SHAPE1
-    pad_pieces = [('RED', 5), ('PURPLE', 4), ('YELLOW', 4), ('PURPLE', 0), ('RED', 1), ('YELLOW', 0), ('RED', 4),
-                  ('PURPLE', 2), ('RED', 0), ('YELLOW', 3), ('RED', 3), ('YELLOW', 5)]
-    pieces = [Piece(Pads[color], index) for color, index in pad_pieces]
-    solution = next(solve(shape.tiles, pieces))
-    end = print_solution(solution)
-    print(f'Time = {int((end - start) * 1000)} ms')
+    shape = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES.value
+    pieces = [(color, idx) for color in ('RED', 'PINK', 'YELLOW', 'BLUE', 'GREEN') for idx in range(6)]
+    # hints = [(0, 'YELLOW', 1, 'R2'), (1, 'GREEN', 1, 'F3'), (2, 'PURPLE', 5, 'R1'), (3, 'YELLOW', 5, 'F1'),
+    #          (4, 'BLUE', 2, 'ID'), (5, 'PURPLE', 1, 'F2'), (6, 'PURPLE', 0, 'R1')]
+    hints = None
+    shuffle(pieces)
+    filtered_pieces = filter_pieces(shape, pieces, hints)
+    solution = next(s for s in (next(solve(shape, pcs, hints), None) for pcs in filtered_pieces) if s is not None)
+    if solution:
+        print_solution(solution)
+    else:
+        print("No solution found!")
+    print(f'Time = {int((time.time() - start) * 1000)} ms')
 
 
 if __name__ == '__main__':
-    main2()
+    main3()

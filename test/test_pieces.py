@@ -6,7 +6,7 @@ from pieces import Piece
 
 
 @pytest.mark.parametrize(
-    'pad', list(Pads)
+    'color', [pad.name for pad in Pads]
 )
 @pytest.mark.parametrize(
     ('orientation', 'expected_mapping'), [
@@ -20,10 +20,9 @@ from pieces import Piece
         (Orientations.F4, lambda i: -i % 16),
     ]
 )
-def test_piece(pad: Pads, orientation, expected_mapping):
-    color = pad.name
-    for index, pattern in enumerate(pad.value):
-        piece = Piece(pattern, color, index)
+def test_piece(color, orientation, expected_mapping):
+    for index in range(6):
+        piece = Piece(color, index)
         assert isinstance(piece.edge, tuple)
         assert all(j in (0, 1) for j in piece.edge)
         edge_before = piece.edge
