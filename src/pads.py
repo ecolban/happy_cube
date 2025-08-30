@@ -1,4 +1,4 @@
-from enum import StrEnum, Enum
+from enum import Enum
 
 
 class Pad:
@@ -13,7 +13,7 @@ class Pad:
         return iter(self._pad_pieces)
 
 
-class Pads(Enum):
+class Pads2(Enum):
     BLUE = """
     00100
     01110
@@ -204,7 +204,7 @@ class Pads(Enum):
         return Pad(self.value)
 
 
-class Pads2(StrEnum):
+class Pads(Enum):
     BLUE = """
     01000
     01111
@@ -429,4 +429,4 @@ class Pads2(StrEnum):
     """
 
     def parse(self):
-        return Pad(self)
+        return Pad(self.value)
