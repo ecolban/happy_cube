@@ -7,7 +7,7 @@ This kata is the first in a series aimed at building a solver for Happy Cube puz
 Happy Cubes is a 3D puzzle game where the goal is to assemble puzzle pieces into a cube (or other shapes).
 Each piece is cut from a colored foam pad and can be represented as a 5×5 matrix of 1s and 0s:
 
-- 1 = a small cubic unit (we’ll call it a cubit) is present.
+- 1 = a small cubic unit (we’ll call it a _cubit_) is present.
 - 0 = no cubit in that position.
 
 Example:
@@ -57,7 +57,7 @@ For a 6-tile cube:
 ```
 
 We assign a **North edge** to each tile (e.g., the top edge in this layout). Then for each tile, we note which tiles lie
-to its **North**, **East**, **South**, **West** when folded into shape.
+to its **north**, **east**, **south**, **west** when folded into shape.
 
 Example: The neighbors of tiles in ascending order are given by the following list.
 
@@ -78,7 +78,7 @@ This list of 4-tuples is the **shape description**.
 
 ### Slots
 
-Each tile has 16 cubit **slots** at its edges numbered clockwise starting from the northwest corner:
+Each tile has 16 **slots** at its edges numbered clockwise starting from the northwest corner:
 
 ```
      0  1  2  3  4
@@ -107,8 +107,17 @@ In a shape, tile slots of adjacent tiles **overlap**:
     12 11 10  9  8|0 15 14 13 12
 ```
 
-Overlapping tile slots are the same **shape slot**. Mathematically speaking, shape slots are equivalence classes of tile
-slots with respect to the “overlaps” relation.
+Note that two non-adjacent tiles may overlap at a corner only. This may happen if there is a tile `B` adjacent to `A`
+and `D` where, e.g., `A[8]` overlaps `B[12]`, which overlaps `D[0]`.
+
+Configuration of tiles where `A` and `D` overlap at a corner only:
+
+```
+A B
+C D
+```
+
+**Shape slots:** We'll say that overlapping tile slots share the same _shape slot_.
 
 Observe:
 
@@ -117,27 +126,42 @@ Observe:
 
 For example, a 6-tile cube has:
 
-- 8 (= `6 * 4 / 3`) corner slots (one per vertex).
-- 36 (= `6 * 12 / 2`) remaining slots (three per cube edge).
+- 8 (= `6 * 4 / 3`) corner shape slots (one per cube vertex) -- 6 tiles with 4 corner slots each, with 3 tile slots
+  sharing
+  each shape slot
+- 36 (= `6 * 12 / 2`) remaining shape slots (three per cube edge) -- 6 tiles with 12 non-corner slots each, with 2 tile
+  slots
+  sharing each shape slot
 
 A 24-tile 2x2x2 cube (4 tiles per face) has:
 
-- 26 corner slots, 8 of which have 3 overlapping tile slots (the ones at the cubes vertices) and the remaining 18 have 4
-  overlapping tile slots. (This yields `8 * 3 + 18 * 4 = 24 * 4` corner tile slots.)
+- 26 corner shape slots, 8 of which have 3 overlapping tile slots (the ones at the cubes vertices) and the remaining 18
+  have 4 overlapping tile slots. (This yields `8 * 3 + 18 * 4 = 24 * 4` corner tile slots.)
 - 144 (= `24 * 12 / 2`) remaining slots.
 
-#### Special shapes
+### Tack stitches
 
-Some shapes cannot be described by tile adjacency alone, because additional overlaps arise.
+(You may skip reading this section; its presence is only to warn people from becoming "too clever". The gist of it is
+that there are shapes for which shape descriptions as described above, i.e., as a list of 4-tuples, are inadequate. Such
+shapes will not be part of this kata.)
 
-For example, consider two 6-tile cubes joined at a single vertex, so that one corner slot from each cube overlaps. The
-shape description in terms of tile adjacency is the same as for two detached cubes, but the "overlap" relation has been
-extended beyond what adjacency dictates.
+Not all overlaps in a shape come directly from tile adjacency. In some cases, additional overlaps arise that require
+extra reasoning to detect.
 
-A more interesting case comes from modifying a 2×2×2 cube (a cube with 4 tiles on each face). Choose one vertex and
-"invert" the three tiles meeting at that vertex, effectively pushing the vertex into the interior of the cube. The
-result is a 2×2×2 cube with a 1×1×1 cube carved out at one vertex, as shown below. In this configuration, three tile
-slots overlap at the cube’s center. Let's call this shape slot A (the intersection of tiles 3, 7, and 8 in the figure).
+To explain this, it helps to borrow terms from sewing:
+
+- The intersection of two adjacent tiles is like a **seam**.
+- Each pair of overlapping slots is a **stitch**.
+- A stitch that is not part of a seam is a **tack stitch** (a reinforcing stitch that holds points together).
+
+**Example 1.**  
+Take two 6-tile cubes joined at a single vertex so that a corner slot from each cube overlap. Tile adjacency alone
+would describe them as two detached cubes, but the “overlap” relation extends further: the shared vertex is a single
+tack stitch, not explained by seams.
+
+**Example 2.**  
+Start with a 2×2×2 cube (4 tiles per face). Choose a vertex and “invert” the three tiles that meet there, pushing the
+vertex into the cube’s interior. The result is a 2×2×2 cube with a 1×1×1 cube "carved out", as shown:
 
 ```
            +------------------+                         +------------------+
@@ -156,8 +180,11 @@ slots overlap at the cube’s center. Let's call this shape slot A (the intersec
 
 ```
 
-If you repeat the inversion at the opposite vertex, another three tile slots will overlap at the center. Let's call this
-shape slot B (the intersection of tiles 10, 18, and 20 in the figure).
+Here, three tile slots overlap at the cube’s center. Call this overlap **shape slot A** (the intersection of tiles 3,
+7, and 8 in the figure).
+
+If you repeat the inversion at the opposite vertex, another three tile slots will overlap at the cube's center. Let's
+call this shape slot B (the intersection of tiles 10, 18, and 20 in the figure).
 
 ```
            +-------------------+                        +-------------------+
@@ -176,17 +203,22 @@ shape slot B (the intersection of tiles 10, 18, and 20 in the figure).
 
 ```
 
-The fact that shape slot A and shape slot B are the same shape slot because they occupy the center of the cube does
-not follow from tile adjacency alone and requires additional geometric reasoning to detect.
+Since A and B occupy the same physical space (the center of the cube), they are actually the same shape slot —- but this
+fact cannot be deduced from adjacency alone. It requires geometric reasoning. Their overlap is a tack stitch.
 
-We will not include special shapes like these in this kata.
+In this kata, _we will consider only shapes with seams (adjacency overlaps) only, not tack stitches._
 
-### Challenge 1
+---
 
-Write:
+### Challenge
+
+Write a function:
 
 ```
 get_shape_slots(shape: list[tuple[int, int, int, int]]) -> list[int]
+  """Each distinct value in the returned list represents a shape slot 
+  and the indices that hold that value are the tile slots that share 
+  the shape slot."""
 ```
 
 Input:
@@ -194,13 +226,14 @@ Input:
 - `shape` is a list of 4-tuples (shape description) as shown above
 - `len(shape) <= 36`
 - `shape` can be assembled in 3D; no "Klein bottles" or such
-- `shape` is not special,
 
 Output:
 
 If we call the return value `result`, then:
 
 - `len(result) == 16 * len(shape)`
-- `result[16 * m + i] == result[16 * n + j]` if and only if slot `i` of tile number `m` overlaps slot`j` of tile
-  number `n`.
-- For all `k` in `result`, `0 ≤ k < 16 * N`
+- for tile numbers `m` and `n` and slot numbers `i` and `j`, `result[16 * m + i] == result[16 * n + j]` if and only if
+  slot `i` of tile `m` overlaps slot`j` of tile `n`.
+- for all `k` in `result`, `0 ≤ k < N`, where `N` is the number of distinct values in `result` (`N` is also the number
+  of shape slots)
+

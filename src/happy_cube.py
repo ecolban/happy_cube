@@ -1,12 +1,13 @@
-import re
 import time
+from collections import defaultdict
 from itertools import chain
 from random import shuffle
 from typing import Iterable
 
 from pads import Pads
-from pieces import Piece, Orientations
-from shapes import Shapes, get_shape_slots, filter_pieces
+from pieces import Piece, Orientations, filter_pieces, find_subsets
+from shapes import Shapes, get_shape_slots
+from test_happy_cube import check_solution
 
 
 class Node:
@@ -60,61 +61,66 @@ class Problem:
             tiles: list[tuple[int, int, int, int]],
             pieces: list[Piece],
             hints: Iterable[tuple[int, str, int, str]],
+            tack_stitches: list[tuple[int, int]]
     ):
         self._num_tiles = len(tiles)
         self._pieces = pieces
-        self._slots = get_shape_slots(tiles)
+        self._slots = get_shape_slots(tiles, tack_stitches)
         self._hints = hints
-        self._row_mapping = {}
+        self._assigned = self._get_assigned()
+        self._row_mapping = []
         self._head = self._load_problem()
-        self._hints = hints or []
 
-    def _get_matrix(self):
-
-        row_idx = 0
-        rows = []
-        ignored_tiles = set()
-        ignored_pieces = set()
-        ignored_slots = set()
+    def _get_assigned(self):
+        assigned_tiles = set()
+        assigned_pieces = set()
+        assigned_slots = set()
         if self._hints:
             for tile, pc_color, pc_idx, orientation_str in self._hints:
-                ignored_tiles.add(tile)
-                ignored_pieces.add((pc_color, pc_idx))
-                piece = Piece(pc_color, pc_idx)
-                piece.orientation = Orientations[orientation_str]
-                ignored_slots |= {self._slots[tile * 16 + i] for i, v in enumerate(piece.edge) if v == 1}
-        tiles = [tile for tile in range(self._num_tiles) if tile not in ignored_tiles]
-        pieces = [pc for pc in self._pieces if (pc.color, pc.index) not in ignored_pieces]
-        slots = set(self._slots) - ignored_slots
+                assigned_tiles.add(tile)
+                assigned_pieces.add((pc_color, pc_idx))
+                piece = Piece(pc_color, pc_idx, Orientations[orientation_str])
+                assigned_slots |= {self._slots[tile * 16 + i] for i, v in enumerate(piece.edge) if v == 1}
+        return assigned_pieces, assigned_slots, assigned_tiles
+
+    def _get_unassigned(self):
+        assigned_pieces, assigned_slots, assigned_tiles = self._assigned
+        tiles = [tile for tile in range(self._num_tiles) if tile not in assigned_tiles]
+        pieces = [pc for pc in self._pieces if (pc.color, pc.index) not in assigned_pieces]
+        slots = set(self._slots) - assigned_slots
+        return pieces, slots, tiles
+
+    def _get_matrix(self, pieces, slots, tiles):
+        rows = []
         slot_map = {j: i for i, j in enumerate(slots)}
-        columns = [True] * len(slots) + [False] * len(pieces)
         for tile in tiles:
             for piece_column, piece in enumerate(pieces, start=len(slots)):
                 rows_for_piece = set()
                 for orientation in Orientations:
                     piece.orientation = orientation
-                    slot_subset = {self._slots[tile * 16 + i] for i, cubit in enumerate(piece.edge) if cubit == 1}
-                    if not slot_subset <= slots:
+                    covered_slots = {self._slots[tile * 16 + i] for i, cubit in enumerate(piece.edge) if cubit == 1}
+                    if not covered_slots <= slots:
                         continue
-                    row = [0] * len(columns)
-                    for slot_column in slot_subset:
-                        row[slot_map[slot_column]] = 1
+                    row = [0] * (len(slots) + len(pieces))
+                    for slot in covered_slots:
+                        row[slot_map[slot]] = 1
                     row[piece_column] = 1
                     if tuple(row) in rows_for_piece:
                         continue
                     rows_for_piece.add(tuple(row))
                     rows.append(row)
-                    self._row_mapping[row_idx] = (tile, piece.color, piece.index, orientation.name)
-                    row_idx += 1
-        return columns, rows
+                    self._row_mapping.append((tile, piece.color, piece.index, orientation.name))
+        return rows
 
     def _load_problem(self):
 
-        columns, rows = self._get_matrix()
+        pieces, slots, tiles = self._get_unassigned()
+        # A column is True if primary and False if secondary
+        columns = [True] * len(slots) + [len(pieces) == len(tiles)] * len(pieces)
+
         # Add column headers
         head = Head()
         left_node = head
-
         column_heads: list[ColumnHead] = []
         for primary in columns:
             node = ColumnHead(left=left_node, right=None, primary=primary)
@@ -124,6 +130,7 @@ class Problem:
         left_node.right = head
         head.left = left_node
         # Add rows
+        rows = self._get_matrix(pieces, slots, tiles)
         for row_idx, row in enumerate(rows):
             first_node = left_node = None
             for column_head, v in zip(column_heads, row):
@@ -149,6 +156,11 @@ class Problem:
             first_node.left = left_node
 
         return head
+
+    def update_pieces(self, pieces: list[Piece]):
+        self._pieces = pieces
+        self._row_mapping = []
+        self._head = self._load_problem()
 
     @staticmethod
     def cover(column):
@@ -195,93 +207,170 @@ class Problem:
         return search()
 
 
-def read_problem6_pieces():
-    def h(pad_str):
-        m = re.match(r'([A-Z]+)\[(\d)]', pad_str)
-        return m.group(1), int(m.group(2))
-
-    with open('possible_piece_selection_problem6.csv', mode='r') as f:
-        res = [[h(s) for s in line.split(',')] for line in f]
-    return res
-
-
 def solve(
-        shape: list[tuple[int, int, int, int]],
+        tiles: list[tuple[int, int, int, int]],
         pieces: list[tuple[str, int]],
-        hints: list[tuple[int, str, int, str]] = None,
+        tack_stitches: list[tuple[int, int]] | None = None,
+        hints: list[tuple[int, str, int, str]] | None = None,
 ):
     piece_objs = [Piece(color, index) for color, index in pieces]
-    problem = Problem(shape, piece_objs, hints)
+    problem = Problem(tiles, piece_objs, hints or [], tack_stitches or [])
     return problem.solve()
 
 
-def print_solution(solution, hints=None):
-    if hints:
-        solution.extend(hints)
-    solution.sort()
+def print_solution(solution, name=None):
+    if name:
+        print(name)
     print(', '.join(str(x) for x in solution))
-    used_pieces = set()
     for tile, color, index, orientation_str in solution:
-        used_pieces.add((color, index))
         print(f'{tile}: {color}[{index}]')
         p = Piece(color, index)
         p.orientation = Orientations[orientation_str]
         print(p)
 
-    unused_pieces = {(pad.name, i) for pad in Pads for i in range(6)} - used_pieces
-    print(list(unused_pieces))
 
-
-def main():
-    start = time.time()
+def three_d_cross():
+    shape = Shapes.THREE_D_CROSS
+    # tiles = shape_shuffle(shape.tiles)
+    tiles = shape.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+    shuffle(pieces)
     hints = [
-        (23, 'YELLOW', 1, 'F1'),
-        (3, 'BLUE', 4, 'R1'),
-        (5, 'PURPLE', 4, 'F2')
+        # (2, 'GREEN', 2, 'R0'),
     ]
-    shape = Shapes.CUBE_2x2x2
-    pad_pieces = [
-        ('BLUE', 0), ('BLUE', 2), ('BLUE', 3), ('BLUE', 4), ('BLUE', 5),
-        ('ORANGE', 0), ('ORANGE', 1), ('ORANGE', 2), ('ORANGE', 4), ('ORANGE', 5),
-        ('PURPLE', 3), ('PURPLE', 4), ('PURPLE', 5),
-        ('RED', 0), ('RED', 2), ('RED', 3), ('RED', 4), ('RED', 5),
-        ('YELLOW', 0), ('YELLOW', 1), ('YELLOW', 2), ('YELLOW', 3), ('YELLOW', 4), ('YELLOW', 5),
-    ]
-    solution = next(solve(shape.tiles, pad_pieces, hints))
-    print_solution(solution, hints)
-    print(f'Time = {int((time.time() - start) * 1000)} ms')
+    solvable = find_subsets(tiles, pieces, hints=hints)
+    # solvable = list(find_subsets(tiles, pieces, hints=hints))
+    # always_used = set(pieces).intersection(*(set(pcs) for pcs in solvable))
+    # print(len(always_used), ','.join(f'{color}[{index}]' for color, index in sorted(always_used)))
+    # never_used = set(pieces) - set().union(*(set(pcs) for pcs in solvable))
+    # print(len(never_used), ','.join(f'{color}[{index}]' for color, index in sorted(never_used)))
+    # sometimes_used = set(pieces) - always_used.union(never_used)
+    # print(len(sometimes_used), ','.join(f'{color}[{index}]' for color, index in sorted(sometimes_used)))
+
+    for pcs in solvable:
+        solution = next(solve(tiles, pcs, hints=hints), None)
+        if solution:
+            check_solution(tiles, set(pieces), tack_stitches=[], solution=solution)
+            return solution
 
 
-def main2():
-    start = time.time()
-    shape = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES
-    pieces = [(pad.name, idx) for pad in Pads for idx in range(6)]
-    shuffle(pieces)
-    filtered_pieces = filter_pieces(shape, pieces)
-    solution = next(s for s in (next(solve(shape.tiles, pcs), None) for pcs in filtered_pieces) if s is not None)
-    if solution:
-        print_solution(solution)
-    else:
-        print("No solution found!")
-    print(f'Time = {int((time.time() - start) * 1000)} ms')
-
-
-def main3():
-    start = time.time()
+def cube_with_2_inverted_vertices():
     tiles = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES.tiles
-    pieces = [(color, idx) for color in ('RED', 'PINK', 'YELLOW', 'BLUE', 'GREEN') for idx in range(6)]
-    # hints = [(0, 'YELLOW', 1, 'R2'), (1, 'GREEN', 1, 'F3'), (2, 'PURPLE', 5, 'R1'), (3, 'YELLOW', 5, 'F1'),
-    #          (4, 'BLUE', 2, 'ID'), (5, 'PURPLE', 1, 'F2'), (6, 'PURPLE', 0, 'R1')]
-    hints = None
+    pieces = [(color, idx) for color in ('BLUE', 'PINK', 'YELLOW', 'RED', 'PURPLE') for idx in range(1, 7)]
     shuffle(pieces)
-    filtered_pieces = filter_pieces(tiles, pieces, hints)
-    solution = next(s for s in (next(solve(tiles, pcs, hints), None) for pcs in filtered_pieces) if s is not None)
+    tack_stitches = [(8 * 16 + 0, 19 * 16 + 4)]
+    hints = []
+    solvable = find_subsets(tiles, pieces, hints=hints, tack_stitches=tack_stitches)
+    for pcs in solvable:
+        solution = next(solve(tiles, pcs, hints=hints, tack_stitches=tack_stitches), None)
+        if solution:
+            check_solution(tiles, set(pieces), tack_stitches=tack_stitches, solution=solution)
+            return solution
+
+
+def cube_2_by_2_by_2_w_outgrowth():
+    tiles = Shapes.CUBE_2x2x2_WITH_CUBE_1x1x1_OUTGROWTH.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7) if pad.name != 'GREEN' or i != 5]
+    hints = None
+
+    shuffle(pieces)
+    return next(solve(tiles, pieces, hints=hints), None)
+
+
+def cube_2_by_2_by_2():
+    tiles = Shapes.CUBE_2x2x2.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7) if pad.name != 'GREEN' or i != 5]
+    hints = None
+
+    shuffle(pieces)
+    return next(solve(tiles, pieces, hints=hints), None)
+
+
+def two_cube_with_tack_stitch():
+    tiles = Shapes.TWO_CUBE_1x1x1.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+    shuffle(pieces)
+    tack_stitches = [(2 * 16 + 0, 8 * 16 + 0)]
+    return next(solve(tiles, pieces, tack_stitches=tack_stitches), None)
+
+
+def three_cube_with_tack_stitches():
+    tiles = Shapes.THREE_CUBE_1x1x1.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+    shuffle(pieces)
+    tack_stitches = [(0 * 16 + 0, 6 * 16 + 0), (6 * 16 + 8, 12 * 16 + 0)]
+    return next(solve(tiles, pieces, tack_stitches=tack_stitches), None)
+
+
+def four_cube_with_tack_stitches():
+    tiles = Shapes.FOUR_CUBE_1x1x1.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+    shuffle(pieces)
+    tack_stitches = [(0 * 16 + 0, 6 * 16 + 0), (6 * 16 + 8, 12 * 16 + 0), (6 * 16 + 4, 18 * 16 + 0)]
+    return next(solve(tiles, pieces, tack_stitches=tack_stitches), None)
+
+
+def five_cube_with_tack_stitches():
+    tiles = Shapes.FIVE_CUBE_1x1x1.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+    shuffle(pieces)
+    tack_stitches = [
+        (0 * 16 + 0, 6 * 16 + 0),
+        (0 * 16 + 4, 12 * 16 + 0),
+        (0 * 16 + 8, 18 * 16 + 0),
+        (0 * 16 + 12, 24 * 16 + 0),
+    ]
+    return next(solve(tiles, pieces, tack_stitches=tack_stitches), None)
+
+
+def simple_cube():
+    tiles = Shapes.CUBE_1x1x1.tiles
+    pieces = [(color, i) for color in ('PURPLE',) for i in range(1, 7)]
+    shuffle(pieces)
+    return next(solve(tiles, pieces), None)
+
+
+def simple_prism():
+    tiles = Shapes.PRISM_1x1x2.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+    shuffle(pieces)
+    return next(solve(tiles, pieces), None)
+
+
+def three_cube():
+    tiles = Shapes.THREE_CUBE_1x1x1.tiles
+    pieces = [(color, i) for color in ('BLUE', 'GREEN', 'PINK') for i in range(1, 7)]
+    shuffle(pieces)
+    for pcs in find_subsets(tiles, pieces):
+        return next(solve(tiles, pcs), None)
+
+
+def three_steps():
+    tiles = Shapes.THREE_STEPS.tiles
+    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7) if (pad.name, i) != ('GREEN', 2)]
+    hints = []
+    shuffle(pieces)
+    return next(solve(tiles, pieces, hints), None)
+
+
+def main(problem, name):
+    start = time.time()
+    solution = problem()
     if solution:
-        print_solution(solution)
+        print_solution(solution, name)
     else:
-        print("No solution found!")
+        print("No solution found.")
     print(f'Time = {int((time.time() - start) * 1000)} ms')
 
 
 if __name__ == '__main__':
-    main3()
+    # main(five_cube_with_tack_stitches, "4 Cube with tack stitches")
+    # main(three_d_cross, "3D Cross")
+    # main(three_steps, "3 Steps")
+    # main(cube_2_by_2_by_2_w_outgrowth, "2x2x2 with Outgrowth")
+    # main(cube_2_by_2_by_2, "2x2x2 cube")
+    # main(simple_cube, "Simple cube")
+    # main(simple_prism, "Simple prism")
+    # main(two_cube_with_tack_stitch, "2 cubes tacked together")
+    # main(cube_with_2_inverted_vertices, "2x2x2 cube with inverted vertices")
+    main(three_d_cross, "3D cross")

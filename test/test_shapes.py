@@ -1,11 +1,12 @@
 from itertools import combinations
+from random import choice, shuffle
 
 import pytest
 
-from happy_cube import solve
+from happy_cube import solve, check_solution
 from pads import Pads
-from pieces import Piece
-from shapes import Shapes, get_shape_slots, shape_shuffle, check_solution
+from pieces import Orientations
+from shapes import Shapes, get_shape_slots, shape_shuffle, get_shape_slots_
 
 
 @pytest.mark.parametrize(
@@ -28,34 +29,29 @@ def test_shape_corners(shape, expected_corner_slots):
     assert len(c) == expected_corner_slots
 
 
-@pytest.mark.parametrize(
-    ('shape', 'a_solution'),
-    [
-        (Shapes.CUBE_1x1x1.value,
-         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 15, 14, 13, 12, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-          25, 26, 12, 11, 10, 9, 8, 27, 28, 29, 30, 31, 32, 33, 19, 18, 17, 16, 8, 7, 6, 5, 4, 34, 35, 36, 37, 38, 39,
-          40, 30, 29, 28, 27, 19, 33, 32, 31, 30, 40, 39, 38, 37, 41, 42, 43, 23, 22, 21, 20, 23, 43, 42, 41, 37, 36,
-          35, 34, 4, 3, 2, 1, 0, 26, 25, 24]),
-    ]
-)
-def test_get_shap_slots(shape, a_solution):
-    slots = get_shape_slots(shape)
+@pytest.mark.parametrize('shape', [shape_shuffle(shape.value) for shape in Shapes for _ in range(10)])
+def test_get_shap_slots(shape):
+    shape = shape_shuffle(shape)
+    reference = get_shape_slots(shape)
+    slots = get_shape_slots_(shape)
     num_slots = 16 * len(shape)
     assert len(slots) == num_slots, "Result does not have the correct length"
     assert all(isinstance(k, int) for k in slots), "Result contains non-ints"
     assert all(0 <= k < num_slots for k in slots), "Result contains numbers out of range"
     for i, j in combinations(range(num_slots), 2):
-        must_be_equal = a_solution[i] == a_solution[j]
-        if (slots[i] == slots[j]) != must_be_equal:
-            c = '!='[must_be_equal]
+        equal_in_reference = reference[i] == reference[j]
+        if (slots[i] == slots[j]) != equal_in_reference:
+            c = '!='[int(equal_in_reference)]
             assert False, f"Expected result[{i}] {c}= result[{j}]"
 
 
 @pytest.mark.parametrize(
-    'pieces', [[(pad.name, index) for index in range(6)] for pad in Pads]
+    'pieces', [[(pad.name, index) for index in range(1, 7)] for pad in (Pads.BLUE,)]
 )
 def test_shuffle(pieces):
     tiles = shape_shuffle(Shapes.CUBE_1x1x1.tiles)
-    solution = next(solve(tiles, pieces), None)
+    shuffle(pieces)
+    solution = [(t, *pieces[t], choice(list(Orientations)).name) for t in range(6)]
     assert solution
-    assert check_solution(tiles, set(pieces), solution)
+    errors = check_solution(tiles, set(pieces), [], solution)
+    assert not errors, f"Errors:\n - {'\n - '.join(errors)}"

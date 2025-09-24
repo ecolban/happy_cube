@@ -1,33 +1,43 @@
+import sys
+from pathlib import Path
+
 import pytest
 
-from pads import Pads, Pads2
+SRC = Path(__file__).parent.parent / 'src'
+
+sys.path.append(str(SRC))
+
+from pads import Pads
+
+COLORS = ['BLUE', 'GREEN', 'PINK', 'PURPLE', 'RED', 'YELLOW']
 
 
-@pytest.mark.parametrize(
-    "pads_obj", Pads
-)
-def test_pad(pads_obj):
-    pad = pads_obj.parse()
-    assert sum(1 for _ in pad) == 6
-    for i, pad_piece in enumerate(pad):
-        assert pad[i] == pad_piece
-        assert isinstance(pad_piece, str)
-        lines = pad_piece.splitlines()
-        assert len(lines) == 5
-        assert all(len(line) == 5 for line in lines)
-        assert all(c in '01' for line in lines for c in line)
+@pytest.mark.parametrize('color', COLORS)
+def test_pad(color):
+    pad = Pads[color]
+    assert len(pad) == 7
+    for i in range(1, 7):
+        piece_edge = pad[i]
+        assert isinstance(piece_edge, list)
+        assert len(piece_edge) == 16
+        assert set(piece_edge) == {0, 1}
 
 
-@pytest.mark.parametrize(
-    "pads_obj", Pads2
-)
-def test_pads2(pads_obj):
-    pad = pads_obj.parse()
-    assert sum(1 for _ in pad) == 6
-    for i, pad_piece in enumerate(pad):
-        assert pad[i] == pad_piece
-        assert isinstance(pad_piece, str)
-        lines = pad_piece.splitlines()
-        assert len(lines) == 5
-        assert all(len(line) == 5 for line in lines)
-        assert all(c in '01' for line in lines for c in line)
+@pytest.mark.parametrize('color', COLORS)
+def test_pad_str(color):
+    pad = Pads[color]
+    print(pad)
+    s = str(pad)
+    lines = s.splitlines()
+    assert len(lines) == 12
+    for line in lines:
+        assert len(line) == 3 * 16
+
+
+def test_piece():
+    assert Pads.YELLOW[1] == [0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0]
+    assert Pads.YELLOW[2] == [0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0]
+    assert Pads.YELLOW[3] == [1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1]
+    assert Pads.YELLOW[4] == [0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1]
+    assert Pads.YELLOW[5] == [0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1]
+    assert Pads.YELLOW[6] == [0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0]

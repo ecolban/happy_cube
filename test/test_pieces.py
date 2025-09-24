@@ -10,18 +10,18 @@ from pieces import Piece
 )
 @pytest.mark.parametrize(
     ('orientation', 'expected_mapping'), [
-        (Orientations.ID, lambda i: i),
+        (Orientations.R0, lambda i: i),
         (Orientations.R1, lambda i: (i + 4) % 16),
         (Orientations.R2, lambda i: (i + 8) % 16),
         (Orientations.R3, lambda i: (i + 12) % 16),
-        (Orientations.F1, lambda i: (-i + 4) % 16),
-        (Orientations.F2, lambda i: (-i + 8) % 16),
-        (Orientations.F3, lambda i: (-i + 12) % 16),
-        (Orientations.F4, lambda i: -i % 16),
+        (Orientations.F0, lambda i: (-i + 4) % 16),
+        (Orientations.F1, lambda i: (-i + 8) % 16),
+        (Orientations.F2, lambda i: (-i + 12) % 16),
+        (Orientations.F3, lambda i: -i % 16),
     ]
 )
 def test_piece(color, orientation, expected_mapping):
-    for index in range(6):
+    for index in range(1, 7):
         piece = Piece(color, index)
         assert isinstance(piece.edge, tuple)
         assert all(j in (0, 1) for j in piece.edge)

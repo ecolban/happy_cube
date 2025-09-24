@@ -1,10 +1,5 @@
-from collections import defaultdict
-from collections.abc import Generator, Iterable
 from enum import Enum
-from itertools import combinations
 from random import shuffle, randrange
-
-from pieces import Piece, Orientations
 
 
 class Shapes(Enum):
@@ -34,6 +29,93 @@ class Shapes(Enum):
         (6, 11, 10, 8),
         (8, 9, 11, 7),
         (10, 9, 6, 7),
+    ]
+    THREE_CUBE_1x1x1 = [
+        (5, 3, 2, 1),
+        (0, 2, 4, 5),
+        (0, 3, 4, 1),
+        (0, 5, 4, 2),
+        (2, 3, 5, 1),
+        (4, 3, 0, 1),
+
+        (11, 9, 8, 7),
+        (6, 8, 10, 11),
+        (6, 9, 10, 7),
+        (6, 11, 10, 8),
+        (8, 9, 11, 7),
+        (10, 9, 6, 7),
+
+        (17, 15, 14, 13),
+        (12, 14, 16, 17),
+        (12, 15, 16, 13),
+        (12, 17, 16, 14),
+        (14, 15, 17, 13),
+        (16, 15, 12, 13),
+    ]
+    FOUR_CUBE_1x1x1 = [
+        (5, 3, 2, 1),
+        (0, 2, 4, 5),
+        (0, 3, 4, 1),
+        (0, 5, 4, 2),
+        (2, 3, 5, 1),
+        (4, 3, 0, 1),
+
+        (11, 9, 8, 7),
+        (6, 8, 10, 11),
+        (6, 9, 10, 7),
+        (6, 11, 10, 8),
+        (8, 9, 11, 7),
+        (10, 9, 6, 7),
+
+        (17, 15, 14, 13),
+        (12, 14, 16, 17),
+        (12, 15, 16, 13),
+        (12, 17, 16, 14),
+        (14, 15, 17, 13),
+        (16, 15, 12, 13),
+
+        (23, 21, 20, 19),
+        (18, 20, 22, 23),
+        (18, 21, 22, 19),
+        (18, 23, 22, 20),
+        (20, 21, 23, 19),
+        (22, 21, 18, 19),
+    ]
+    FIVE_CUBE_1x1x1 = [
+        (5, 3, 2, 1),
+        (0, 2, 4, 5),
+        (0, 3, 4, 1),
+        (0, 5, 4, 2),
+        (2, 3, 5, 1),
+        (4, 3, 0, 1),
+
+        (11, 9, 8, 7),
+        (6, 8, 10, 11),
+        (6, 9, 10, 7),
+        (6, 11, 10, 8),
+        (8, 9, 11, 7),
+        (10, 9, 6, 7),
+
+        (17, 15, 14, 13),
+        (12, 14, 16, 17),
+        (12, 15, 16, 13),
+        (12, 17, 16, 14),
+        (14, 15, 17, 13),
+        (16, 15, 12, 13),
+
+        (23, 21, 20, 19),
+        (18, 20, 22, 23),
+        (18, 21, 22, 19),
+        (18, 23, 22, 20),
+        (20, 21, 23, 19),
+        (22, 21, 18, 19),
+
+        (29, 27, 26, 25),
+        (24, 26, 28, 29),
+        (24, 27, 28, 25),
+        (24, 29, 28, 26),
+        (26, 27, 29, 25),
+        (28, 27, 24, 25),
     ]
     SIX_CUBE_1x1x1 = [
         (5, 3, 2, 1),
@@ -179,6 +261,10 @@ class Shapes(Enum):
         (23, 26, 27, 24),
         (23, 9, 27, 25),
         (25, 26, 1, 24),
+
+        #       21
+        #    24 23 26
+        #       25
 
     ]
     #             00
@@ -450,60 +536,91 @@ class Shapes(Enum):
         (20, 14, 0, 6)
     ]
 
+    """
+        00 01               
+     02 03 04 05             09
+     06 07  A       A =   11 08 
+        10                  
+                             
+
+        12 13
+     14 15 16 17         
+        B  20 21         18
+           23       B =  19 22 
+                         
+    """
     CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES = [
-        (22, 1, 2, 4),  # 0
-        (23, 9, 3, 0),
-        (0, 7, 6, 5),
-        (1, 9, 8, 7),
-        (0, 5, 10, 22),
-        (2, 6, 11, 4),  # 5
+        (19, 1, 3, 2),  # 0
+        (23, 5, 4, 0),
+        (0, 3, 6, 19),
+        (0, 4, 7, 2),
+        (1, 5, 9, 3),
+        (1, 21, 9, 4),  # 5
+        (2, 7, 10, 14),
+        (3, 11, 10, 6),
+        (9, 17, 13, 11),
+        (4, 5, 8, 11),
+        (7, 11, 12, 6),  # 10
+        (9, 8, 10, 7),
+        (10, 13, 15, 14),
+        (8, 17, 16, 12),
+        (12, 15, 18, 6),
+        (12, 16, 18, 14),  # 15
+        (13, 17, 20, 15),
+        (13, 8, 21, 16),
+        (15, 22, 19, 14),
+        (18, 22, 0, 2),
+        (16, 21, 23, 22),  # 20
+        (17, 5, 23, 20),
+        (18, 20, 23, 19),
+        (20, 21, 1, 22),
+    ]
+
+    """
+             23
+             22
+             21
+             20
+             19 
+             00
+          01 02 03
+       04 05 06 07 08
+    09 10 11 12 13 14 15
+             16
+             17
+             18  
+ 
+    """
+    THREE_STEPS = [
+        (19, 3, 2, 1),
+        (0, 2, 5, 19),
+        (0, 3, 6, 1),
+        (0, 19, 7, 2),
+        (20, 5, 10, 21),
+        (1, 6, 11, 4),  # 5
         (2, 7, 12, 5),
-        (2, 3, 8, 6),
-        (7, 3, 14, 13),
-        (1, 23, 15, 3),
-        (4, 18, 20, 22),  # 10
-        (5, 12, 16, 18),
+        (3, 8, 13, 6),
+        (20, 21, 14, 7),
+        (22, 10, 18, 23),
+        (4, 11, 17, 9),  # 10
+        (5, 12, 16, 10),
         (6, 13, 16, 11),
-        (8, 14, 17, 12),
+        (7, 14, 16, 12),
         (8, 15, 17, 13),
-        (9, 21, 19, 14),  # 15
-        (12, 17, 18, 11),
-        (13, 14, 19, 16),
-        (16, 20, 10, 11),
-        (17, 15, 21, 20),
-        (19, 21, 10, 18),  # 20
-        (19, 15, 23, 20),
-        (10, 23, 0, 4),
-        (21, 9, 1, 22),
+        (22, 23, 18, 14),  # 15
+        (12, 13, 17, 11),
+        (16, 14, 18, 10),
+        (17, 15, 23, 9),
+        (20, 3, 0, 1),
+        (21, 8, 19, 4),  # 20
+        (22, 8, 20, 4),
+        (23, 15, 21, 9),
+        (18, 15, 22, 9),
     ]
 
     @property
     def tiles(self):
         return self.value
-
-
-def filter_pieces(
-        tiles: list[tuple[int, int, int, int]],
-        pieces: list[tuple[str, int]],
-        hints: list[tuple[int, str, int, str]] = None,
-) -> Generator[list[tuple[str, int]], None, None]:
-    piece_map = {(color, index): (pc.corners(), pc.mid_cubits(), pc.other_cubits())
-                 for color, index in pieces for pc in (Piece(color, index),)}
-    hints = hints or []
-    for _, color, index, _ in hints:
-        pieces.remove((color, index))
-    hints_cubits = tuple(sum(piece_map[(color, index)][i] for _, color, index, _ in hints) for i in range(3))
-    slots = get_shape_slots(tiles)
-    num_tiles = len(tiles)
-    corners = {slots[tile * 16 + i] for tile in range(num_tiles) for i in range(0, 16, 4)}
-    num_corners = len(corners)
-    for pcs in combinations(pieces, num_tiles - len(hints)):
-        if (
-                sum(piece_map[pc][0] for pc in pcs) + hints_cubits[0] == num_corners and
-                sum(piece_map[pc][1] for pc in pcs) + hints_cubits[1] == 2 * num_tiles and
-                sum(piece_map[pc][2] for pc in pcs) + hints_cubits[2] == 4 * num_tiles
-        ):
-            yield pcs
 
 
 def shape_shuffle(tiles: list[tuple[int, int, int, int]]) -> list[tuple[int, int, int, int]]:
@@ -521,7 +638,10 @@ def shape_shuffle(tiles: list[tuple[int, int, int, int]]) -> list[tuple[int, int
     return [res[i] for i in range(num_tiles)]
 
 
-def get_shape_slots(tiles) -> list[int]:
+def get_shape_slots(
+        tiles: list[tuple[int, int, int, int]],
+        tack_stitches: list[tuple[int, int]] | None = None,
+) -> list[int]:
     """
     There are 16 "cubits" around the edge of a tile, which are numbered from 0 to 15 starting at the NW
     corner and moving clockwise to the NE corner, then to the SE, SW and back toward the NW corner.
@@ -537,6 +657,7 @@ def get_shape_slots(tiles) -> list[int]:
     This function returns a list res of length 16 * n, where n is the number of tiles of a problem, such that
     res[16 * i + j] == res[16 * k + m] if and only if Tile i's j'th cubit is the same as Tile k's m'th cubit.
     """
+    tack_stitches = tack_stitches or []
     num_tiles = len(tiles)
     res = list(range(num_tiles * 16))
 
@@ -556,92 +677,46 @@ def get_shape_slots(tiles) -> list[int]:
     for tile1, neighbors in enumerate(tiles):
         for edge1, tile2 in enumerate(neighbors):
             if tile2 > tile1:
-                edge2 = next(i for i, v in enumerate(tiles[tile2]) if v == tile1)
+                try:
+                    edge2 = next(i for i, v in enumerate(tiles[tile2]) if v == tile1)
+                except StopIteration:
+                    print(f"Incorrect shape definition, {tile1=}, {tile2=}")
+                    raise
                 for i in range(5):
                     slot1 = 16 * tile1 + (4 * edge1 + i) % 16
                     slot2 = 16 * tile2 + (4 * edge2 + 4 - i) % 16
                     union(slot1, slot2)
+    for i, j in tack_stitches:
+        union(i, j)
     for i in range(len(res)):
         find(i)
+
+    m, n = {}, 0
+    for i, v in enumerate(res):
+        if v not in m:
+            m[v] = n
+            n += 1
+        res[i] = m[v]
+
     return res
 
 
-def check_solution(
-        tiles: list[tuple[int, int, int, int]],
-        pieces: set[tuple[str, int]],
-        solution: Iterable[tuple[int, str, int, str]],
-) -> bool:
-    res = True
-    covered_tiles = set(tile for tile, *_ in solution)
-    uncovered_tile = next((tile for tile, _ in enumerate(tiles) if tile not in covered_tiles), None)
-    if uncovered_tile:
-        print(f"Tile {uncovered_tile} has not been assigned any piece")
-        res = False
-    piece_assignment = defaultdict(list)
-    for tile, color, index, _ in solution:
-        piece_assignment[(color, index)].append(tile)
-    reused_piece = next((p for p, v in piece_assignment.items() if len(v) > 1), None)
-    if reused_piece:
-        print(f"Piece {reused_piece} is used more than once.")
-        res = False
-    cubits = get_shape_slots(tiles)
-    covered_cubits = defaultdict(list)
-    for tile, color, index, orientation_str in solution:
-        if (color, index) not in pieces:
-            print(f"The solution uses {(color, index)}, which is not in the pieces for this problem.")
-            res = False
-        try:
-            piece = Piece(color, index)
-            piece.orientation = Orientations[orientation_str]
-            for i, v in enumerate(piece.edge):
-                if v == 1:
-                    covered_cubits[cubits[16 * tile + i]].append((tile, color, index))
-        except (IndexError, KeyError):
-            res = False
-    uncovered_cubit = next((cubit for cubit in cubits if cubit not in covered_cubits), None)
-    if uncovered_cubit:
-        tile, i = divmod(uncovered_cubit, 16)
-        print(f"Cubit {i} of tile {tile} is not covered by any piece.")
-        res = False
-    collision = next((cubit for cubit, v in covered_cubits.items() if len(v) > 1), None)
-    if collision:
-        tile, i = divmod(collision, 16)
-        a = ' and '.join(f"piece {(color, index)} assigned to tile {tile}"
-                         for tile, color, index in covered_cubits[collision])
-        print(f"Cubit {i} of tile {tile} is covered by {a}")
-        res = False
-    return res
-
-
-SHAPE6_SOLUTION = [  # Uses Pads2
-    (0, "PURPLE", 4, "F3"),
-    (1, "PINK", 0, "R2"),
-    (2, "YELLOW", 4, "R3"),
-    (3, "YELLOW", 1, "R3"),
-    (4, "GREEN", 1, "R3"),
-    (5, "GREEN", 5, "F1"),
-    (6, "PINK", 2, "F3"),
-    (7, "GREEN", 0, "F2"),
-    (8, "PINK", 1, "F2"),
-    (9, "RED", 1, "R2"),
-    (10, "GREEN", 4, "ID"),
-    (11, "YELLOW", 0, "F2"),
-    (12, "RED", 2, "ID"),
-    (13, "BLUE", 4, "F1"),
-    (14, "GREEN", 3, "F4"),
-    (15, "PINK", 4, "F2"),
-    (16, "PINK", 3, "R3"),
-    (17, "PURPLE", 5, "R1"),
-    (18, "PURPLE", 0, "R2"),
-    (19, "YELLOW", 2, "R3"),
-    (20, "BLUE", 1, "ID"),
-    (21, "BLUE", 5, "R2"),
-    (22, "PURPLE", 1, "ID"),
-    (23, "BLUE", 0, "R2"),
-    (24, "PURPLE", 2, "F2"),
-    (25, "YELLOW", 3, "ID"),
-    (26, "YELLOW", 5, "R2"),
-    (27, "RED", 5, "F1"),
-    (28, "PURPLE", 3, "F1"),
-    (29, "GREEN", 2, "R3"),
-]
+def get_shape_slots_(shape):
+    result, slot = [], 0
+    for i, sides in enumerate(shape):
+        for side in sides:
+            c1, c2 = side, i
+            while c1 > i:
+                c1, c2 = shape[c1][(shape[c1].index(c2) + 1) % 4], c1
+            if side < i:
+                start = (shape[side].index(i) + 1) * 4
+                result.extend(result[side * 16 + (j % 16)] for j in range(start, start - 4, -1))
+            elif c1 < i:
+                pos = (shape[c1].index(c2) + 1) % 4 * 4
+                result.append(result[c1 * 16 + pos])
+                result.extend(range(slot, slot + 3))
+                slot += 3
+            else:
+                result.extend(range(slot, slot + 4))
+                slot += 4
+    return result
