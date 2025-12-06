@@ -2,8 +2,8 @@
 
 ## Pieces
 
-A Happy Cubes set consist of 6 colored pads with six pieces cut out of each.
-To illustrate, the blue pad looks like this:
+A Happy Cubes set consist of 6 colored pads with six pieces cut out of each. To illustrate, the blue pad looks like
+this:
 
 **Example 1:**
 
