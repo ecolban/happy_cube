@@ -6,6 +6,7 @@ from itertools import chain
 from random import shuffle
 from typing import Literal
 
+from exact_cover import ExactCover
 from preloaded import Pads
 
 
@@ -48,7 +49,7 @@ def get_edge(color: str, index: int) -> list[int]:
 
 def get_shape_slots(
         tiles: list[tuple[int, int, int, int]],
-        tack_stitches: list[tuple[int, int]] or None = None,
+        tack_stitches: list[tuple[int, int]] | None = None,
 ) -> list[int]:
     num_tiles = len(tiles)
     res = list(range(num_tiles * 16))
@@ -132,7 +133,7 @@ def filter_pieces(
         pieces: list[tuple[str, int]],
         hints: list[tuple[int, str, int, str]] | None = None,
         tack_stitches: list[tuple[int, int]] = None,
-) -> Generator[list[tuple[str, int]], None, None]:
+) -> Generator[tuple[tuple[str, int]], None, None]:
     hints = hints or []
     slots = get_shape_slots(shape, tack_stitches)
     num_tiles = len(shape)
@@ -150,7 +151,8 @@ def filter_pieces(
     pieces_in_hints = {(color, index) for _, color, index, _ in hints}
     pieces = [piece for piece in pieces if piece not in pieces_in_hints]
     n = len(pieces)
-    cs, ms, os = zip(*(piece_map[p] for p in pieces))
+    # noinspection PyArgumentList
+    cs, ms, os = zip(*(piece_map[p] for p in pieces), strict=True)
     # Optional: reorder 'pieces' by a heuristic (e.g., descending c+m+o)
     order = sorted(range(n), key=lambda i: (cs[i] + ms[i] + os[i]), reverse=True)
     pieces = [pieces[i] for i in order]
@@ -224,145 +226,51 @@ class Problem:
             hints: list[tuple[int, str, int, str]],
             tack_stitches: list[tuple[int, int]],
     ):
-        self._num_tiles = len(shape)
-        self._pieces = pieces
-        self._slots = get_shape_slots(shape, tack_stitches)
-        self._hints = hints
-        self._assigned = self._get_assigned()
-        self._row_mapping = []
-        self._head = self._load_problem()
+        self._num_tiles: int = len(shape)
+        self._pieces: list[tuple[str, int]] = pieces
+        self._slots: list[int] = get_shape_slots(shape, tack_stitches)
+        self._hints: list[tuple[int, str, int, str]] = hints
+        self._row_mapping = {}
 
-    def _get_assigned(self):
-        assigned_tiles = set()
-        assigned_pieces = set()
-        assigned_slots = set()
-        if self._hints:
-            for tile, color, index, orientation_str in self._hints:
-                assigned_tiles.add(tile)
-                assigned_pieces.add((color, index))
-                edge = Orientations[orientation_str].apply_to(get_edge(color, index))
-                assigned_slots |= {self._slots[tile * 16 + i] for i, v in enumerate(edge) if v == 1}
-        return assigned_pieces, assigned_slots, assigned_tiles
-
-    def _get_unassigned(self):
-        assigned_pieces, assigned_slots, assigned_tiles = self._assigned
-        tiles = [tile for tile in range(self._num_tiles) if tile not in assigned_tiles]
-        pieces = [pc for pc in self._pieces if pc not in assigned_pieces]
+    def _get_exact_cover(self):
+        pieces = [p for p in self._pieces]
         shuffle(pieces)
-        slots = set(self._slots) - assigned_slots
-        return pieces, slots, tiles
-
-    def _get_matrix(self, pieces, slots, tiles):
+        slots = set(self._slots)
+        columns = [True] * len(slots) + [False] * len(pieces)
         rows = []
         slot_map = {j: i for i, j in enumerate(slots)}
-        for tile in tiles:
+        row_index = 0
+        for tile in range(self._num_tiles):
+            hint = next((h for h in self._hints if h[0] == tile), None)
+            _, hint_color, hint_index, hint_orientation = hint if hint else (None, None, None, None)
             for piece_column, (color, index) in enumerate(pieces, start=len(slots)):
+                if hint is not None and (color, index) != (hint_color, hint_index):
+                    continue
                 edge = get_edge(color, index)
                 rows_for_piece = set()
                 for orientation in Orientations:
-                    edge_ = orientation.apply_to(edge)
-                    covered_slots = {self._slots[tile * 16 + i] for i, cubit in enumerate(edge_) if cubit == 1}
-                    if not covered_slots <= slots:
+                    if hint is not None and orientation.name != hint_orientation:
                         continue
+                    edge_ = orientation.apply_to(edge)
                     row = [0] * (len(slots) + len(pieces))
-                    for slot in covered_slots:
-                        row[slot_map[slot]] = 1
+                    for slot in (slot_map[self._slots[tile * 16 + i]] for i, cubit in enumerate(edge_)
+                                 if cubit == 1):
+                        row[slot] = 1
                     row[piece_column] = 1
                     if tuple(row) in rows_for_piece:
                         continue
                     rows_for_piece.add(tuple(row))
                     rows.append(row)
-                    self._row_mapping.append((tile, color, index, orientation.name))
-        return rows
+                    self._row_mapping[(tile, color, index, orientation.name)] = row_index
+                    row_index += 1
+        clues = [self._row_mapping[hint] for hint in self._hints]
+        return ExactCover(columns=columns, rows=rows, clues=clues)
 
-    def _load_problem(self):
-
-        pieces, slots, tiles = self._get_unassigned()
-        # A column is True if primary and False if secondary
-        columns = [True] * len(slots) + [False] * len(pieces)
-
-        # Add column headers
-        head = Head()
-        left_node = head
-        column_heads: list[ColumnHead] = []
-        for primary in columns:
-            node = ColumnHead(left=left_node, right=None, primary=primary)
-            left_node.right = node
-            left_node = node
-            column_heads.append(node)
-        left_node.right = head
-        head.left = left_node
-        # Add rows
-        rows = self._get_matrix(pieces, slots, tiles)
-        for row_idx, row in enumerate(rows):
-            first_node = left_node = None
-            for column_head, v in zip(column_heads, row):
-                if v:
-                    up_node = column_head.up
-                    node = Node(
-                        up=up_node,
-                        down=column_head,
-                        left=left_node,
-                        right=None,
-                        column=column_head,
-                        row_idx=row_idx,
-                    )
-                    if first_node is None:
-                        first_node = node
-                    up_node.down = node
-                    if left_node:
-                        left_node.right = node
-                    column_head.up = node
-                    left_node = node
-                    column_head.size += 1
-            left_node.right = first_node
-            first_node.left = left_node
-
-        return head
-
-    @staticmethod
-    def cover(column):
-        column.right.left, column.left.right = column.left, column.right
-        for i in Node.column_iterator(column):
-            for j in Node.row_iterator(i):
-                j.up.down, j.down.up = j.down, j.up
-                if j.column.primary:
-                    j.column.size -= 1
-
-    @staticmethod
-    def uncover(column):
-        for i in Node.column_iterator(column, reverse=True):
-            for j in Node.row_iterator(i, reverse=True):
-                if j.column.primary:
-                    j.column.size += 1
-                j.up.down, j.down.up = j, j
-        column.left.right, column.right.left = column, column
-
-    def solve(self) -> Generator[list, None, None]:
-        solution = []
-
-        def search():
-            try:
-                selected_column = min((c for c in Node.row_iterator(self._head) if c.primary), key=lambda c: c.size)
-            except ValueError:
-                # No more columns to cover; problem solved
-                yield sorted(chain(self._hints, (self._row_mapping[node.row_idx] for node in solution)))
-            else:
-                if selected_column.size == 0:
-                    # No rows left to cover selected_column; solution not found
-                    return
-                self.cover(selected_column)
-                for node in Node.column_iterator(selected_column):
-                    solution.append(node)
-                    for j in Node.row_iterator(node):
-                        self.cover(j.column)
-                    yield from search()
-                    node = solution.pop()
-                    for j in Node.row_iterator(node, reverse=True):
-                        self.uncover(j.column)
-                self.uncover(selected_column)
-
-        return search()
+    def solve(self):
+        exact_cover = self._get_exact_cover()
+        inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
+        for solution in exact_cover.solve():
+            yield sorted(inv_row_mapping[i] for i in solution)
 
 
 def solve(
@@ -374,11 +282,15 @@ def solve(
     @time_guard(timeout=1)  # timeout in seconds
     def _solve():
         if len(pieces) > len(shape):
-            piece_subsets = filter_pieces(shape, pieces, hints=hints, tack_stitches=tack_stitches)
+            hint_pieces = [(color, index) for (_, color, index, _) in hints] if hints else []
+            piece_subsets: Generator[tuple[tuple[str, int]], None, None] = filter_pieces(shape, pieces, hints=hints,
+                                                                                         tack_stitches=tack_stitches)
             for piece_subset in piece_subsets:
-                solution_ = next(Problem(shape, piece_subset, hints or [], tack_stitches or []).solve(), None)
+                solution_ = next(
+                    Problem(shape, list(piece_subset) + hint_pieces, hints or [], tack_stitches or []).solve(), None)
                 if solution_:
                     return solution_
+            return None
         else:
             return next(Problem(shape, pieces, hints or [], tack_stitches or []).solve(), None)
 

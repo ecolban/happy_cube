@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import reduce
 from itertools import chain
 from random import shuffle, randrange, sample
 from time import perf_counter
@@ -74,7 +73,7 @@ def print_edge(edge):
         k = n if n <= 7 else 15 ^ n
         return symbols[k]
 
-    for index in range(7):
+    for index in range(1, 7):
         print(''.join(c(index, j) for j in range(7))[1:].rstrip())
 
 
@@ -82,6 +81,7 @@ def print_solution(solution):
     for tile, color, index, orientation_str in solution:
         print(f"Tile {tile}: {color}[{index}]/{orientation_str}")
         print_edge(get_edge(color, index, orientation_str))
+        print()
 
 
 def shape_shuffle(
@@ -229,8 +229,9 @@ def test_solution_3d_cross():
         (28, 'BLUE', 1, 'F2'),
         (29, 'RED', 4, 'F3'),
     ]
-    for _ in range(10):
-        hints = sample(_solution, 8)
+    for _ in range(1):
+        # hints = sample(_solution, 6)
+        hints = []
         shape, hints = shape_shuffle(_shape, hints=hints)
         # hints = []
         pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
@@ -238,6 +239,7 @@ def test_solution_3d_cross():
         assert solution
         errors = check_solution(shape, set(pieces), hints, solution)
         assert not errors, '\n'.join(errors)
+        print_solution(solution)
 
 
 def test_solution_prism_3x3x1():
@@ -277,6 +279,7 @@ def test_solution_prism_3x3x1():
     for _ in range(1):
         hints = sample(_solution, 7)
         shape, hints = shape_shuffle(_shape, hints=hints)
+        # shape = _shape
         pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
         solution = solve(shape, pieces, hints=hints)
         assert solution
@@ -323,6 +326,7 @@ def test_solution_1x1x1_cube_():
 
 
 @pytest.mark.parametrize('shape', list(Shapes))
+# @pytest.mark.parametrize('shape', [Shapes.THREE_STEPS])
 def test_solution_no_hints(shape: Shapes):
     print(shape.name)
     shape_, _ = shape_shuffle(shape.value)
@@ -334,3 +338,12 @@ def test_solution_no_hints(shape: Shapes):
     assert solution
     errors = check_solution(shape_, set(pieces), [], solution)
     assert not errors, '\n'.join(errors)
+    # print_solution(solution)
+
+
+def test_cube_2x2x2():
+    pieces = [(pad.name, i) for pad in Pads if pad != Pads.PURPLE for i in range(1, 7)]
+    shape = Shapes.CUBE_2x2x2.value
+    solution = solve(shape, pieces)
+    print()
+    print_solution(solution)

@@ -4,7 +4,9 @@ import pytest
 
 from kata_part_2_solution import get_covered_shape_slots, get_edge, Piece
 from preloaded import Pads
-from shapes import Shapes, get_shape_slots, shape_shuffle
+from preloaded import Shapes
+from kata_part_1_solution import get_shape_slots
+from test_kata_part_3 import shape_shuffle
 
 COLORS = ['BLUE', 'GREEN', 'PINK', 'PURPLE', 'RED', 'YELLOW']
 ORIENTATIONS = ['R0', 'R1', 'R2', 'R3', 'F0', 'F1', 'F2', 'F3']
@@ -14,8 +16,9 @@ ORIENTATIONS = ['R0', 'R1', 'R2', 'R3', 'F0', 'F1', 'F2', 'F3']
     'shape', list(Shapes)
 )
 def test_get_covered_shape_slots(shape):
-    slot_map = get_shape_slots(shape_shuffle(shape.value))
-    tile = randrange(len(shape.value))
+    shape, _ = shape_shuffle(shape.value)
+    slot_map = get_shape_slots(shape)
+    tile = randrange(len(shape))
     orientation = choice(ORIENTATIONS)
     color = choice(COLORS)
     index = randrange(1, 7)
