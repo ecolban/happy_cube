@@ -6,9 +6,10 @@ name = "pypi"
 [packages]
 pytest = "*"
 pytest-asyncio = "*"
-ipython = "*"
+rust-dlx-lib = { path = "/Users/erik.colban/projects/rust_dlx_lib" }
 
 [dev-packages]
+ipython = "*"
 
 [requires]
-python_version = "3.12"
+python_version = "3.14"

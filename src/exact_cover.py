@@ -147,3 +147,6 @@ class ExactCover:
                 self.uncover(selected_column)
 
         return search()
+
+def solve_dlx(columns: list[bool], rows: list[list[int]], clues: list[int] | None= None):
+    return next((ExactCover(columns, rows, clues).solve()), None)

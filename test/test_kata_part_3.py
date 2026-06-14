@@ -58,13 +58,13 @@ def print_edge(edge):
     e = edge
     # @formatter:off
     m = [
-        [0,     0,     0,     0,    0,    0, 0],
-        [0,  e[0],  e[1],  e[2], e[3], e[4], 0],
-        [0, e[15],     1,     1,    1, e[5], 0],
-        [0, e[14],     1,     1,    1, e[6], 0],
-        [0, e[13],     1,     1,    1, e[7], 0],
-        [0, e[12], e[11], e[10], e[9], e[8], 0],
-        [0,     0,     0,     0,    0,    0, 0],
+            [0,     0,     0,     0,    0,    0, 0],
+            [0,  e[0],  e[1],  e[2], e[3], e[4], 0],
+            [0, e[15],     1,     1,    1, e[5], 0],
+            [0, e[14],     1,     1,    1, e[6], 0],
+            [0, e[13],     1,     1,    1, e[7], 0],
+            [0, e[12], e[11], e[10], e[9], e[8], 0],
+            [0,     0,     0,     0,    0,    0, 0],
     ]
     # @formatter:on
 
@@ -85,8 +85,8 @@ def print_solution(solution):
 
 
 def shape_shuffle(
-        shape: list[tuple[int, int, int, int]],
-        hints: list[tuple[int, str, int, str]] | None = None,
+    shape: list[tuple[int, int, int, int]],
+    hints: list[tuple[int, str, int, str]] | None = None,
 ) -> tuple[list[tuple[int, int, int, int]], list[tuple[int, str, int, str]]]:
     hints = hints or []
     num_tiles = len(shape)
@@ -95,7 +95,8 @@ def shape_shuffle(
     res = {}
     for tile, neighbors in enumerate(shape):
         res[permutation[tile]] = tuple(permutation[j] for j in neighbors)
-    hints_map = {permutation[tile]: rest for tile, *rest in hints}
+    hints_map = {permutation[tile]: (color, index, orientation_str)
+                 for tile, color, index, orientation_str in hints}
     for tile, neighbors in res.items():
         k = randrange(4)
         if k > 0:
@@ -116,7 +117,7 @@ def test_solution_1x1x1_cube():
     start = perf_counter()
     solution = solve(shape, pieces, hints=hints)
     end = perf_counter()
-    print(f"Time = {round((end - start) * 1000)} ms")
+    print(f"\nTime = {round((end - start) * 1000)} ms")
     assert solution
     errors = check_solution(shape, set(pieces), hints, solution)
     assert not errors, '\n'.join(errors)

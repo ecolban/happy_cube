@@ -618,11 +618,11 @@ class Shapes(Enum):
 
 
 def check_solution(
-        shape: list[tuple[int, int, int, int]],
-        pieces: set[tuple[str, int]],
-        hints: list[tuple[int, str, int, str]] | None,
-        solution: list[tuple[int, str, int, str]],
-        tack_stitches: list[tuple[int, int]] | None = None,
+    shape: list[tuple[int, int, int, int]],
+    pieces: set[tuple[str, int]],
+    hints: list[tuple[int, str, int, str]] | None,
+    solution: list[tuple[int, str, int, str]],
+    tack_stitches: list[tuple[int, int]] | None = None,
 ) -> list[str]:
     class Orientations(Enum):
         R0 = (1, 0)
