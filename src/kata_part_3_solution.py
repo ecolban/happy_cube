@@ -4,10 +4,10 @@ from enum import Enum
 from functools import cache, wraps
 from itertools import chain
 from random import shuffle
-from typing import Literal
 
-from exact_cover import ExactCover
-from preloaded import Pads
+from rust_dlx_lib import solve_dlx
+
+from preloaded import Pads, Shapes
 
 
 class Orientations(Enum):
@@ -83,49 +83,6 @@ def get_shape_slots(
         find(i)
 
     return res
-
-
-class Node:
-    def __init__(self, up, down, left, right, column=None, row_idx=None):
-        self.up = up
-        self.down = down
-        self.left = left
-        self.right = right
-        self.column = column
-        self.row_idx = row_idx
-
-    @staticmethod
-    def row_iterator(node, reverse=False):
-        """Iterates through all the nodes in a row."""
-        start_node = node
-        node = node.left if reverse else node.right
-        while node != start_node:
-            yield node
-            node = node.left if reverse else node.right
-
-    @staticmethod
-    def column_iterator(node, reverse=False):
-        """Iterates through all the nodes in a column."""
-        start_node = node
-        node = node.up if reverse else node.down
-        while node != start_node:
-            yield node
-            node = node.up if reverse else node.down
-
-
-class ColumnHead(Node):
-    def __init__(self, left, right, primary: bool = True):
-        super().__init__(self, self, left, right)
-        self.primary = primary
-        self.size = 0
-
-
-class Head(Node):
-    def __init__(self):
-        super().__init__(self, self, self, self)
-
-
-type Edge = list[Literal[0, 1]]
 
 
 def filter_pieces(
@@ -232,7 +189,7 @@ class Problem:
         self._hints: list[tuple[int, str, int, str]] = hints
         self._row_mapping = {}
 
-    def _get_exact_cover(self):
+    def solve(self):
         pieces = [p for p in self._pieces]
         shuffle(pieces)
         slots = set(self._slots)
@@ -264,13 +221,10 @@ class Problem:
                     self._row_mapping[(tile, color, index, orientation.name)] = row_index
                     row_index += 1
         clues = [self._row_mapping[hint] for hint in self._hints]
-        return ExactCover(columns=columns, rows=rows, clues=clues)
+        solution = solve_dlx(columns=columns, rows=rows, clues=clues)
 
-    def solve(self):
-        exact_cover = self._get_exact_cover()
         inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
-        for solution in exact_cover.solve():
-            yield sorted(inv_row_mapping[i] for i in solution)
+        return sorted(inv_row_mapping[i] for i in solution)
 
 
 def solve(
@@ -283,16 +237,19 @@ def solve(
     def _solve():
         if len(pieces) > len(shape):
             hint_pieces = [(color, index) for (_, color, index, _) in hints] if hints else []
-            piece_subsets: Generator[tuple[tuple[str, int]], None, None] = filter_pieces(shape, pieces, hints=hints,
-                                                                                         tack_stitches=tack_stitches)
+            piece_subsets = filter_pieces(shape, pieces, hints=hints, tack_stitches=tack_stitches,)
             for piece_subset in piece_subsets:
-                solution_ = next(
-                    Problem(shape, list(piece_subset) + hint_pieces, hints or [], tack_stitches or []).solve(), None)
+                solution_ = Problem(
+                    shape,
+                    list(piece_subset) + hint_pieces,
+                    hints or [],
+                    tack_stitches or []
+                ).solve()
                 if solution_:
                     return solution_
             return None
         else:
-            return next(Problem(shape, pieces, hints or [], tack_stitches or []).solve(), None)
+            return Problem(shape, pieces, hints or [], tack_stitches or []).solve()
 
     for tries in range(6):
         try:
@@ -324,3 +281,18 @@ def time_guard(timeout: int = 1):
         return wrapper
 
     return decorator
+
+
+if __name__ == '__main__':
+    import cProfile
+    from pstats import SortKey
+
+
+    def main():
+        pieces = [(pad.name, i) for pad in Pads if pad != Pads.PURPLE for i in range(1, 7)]
+        shape = Shapes.THREE_D_CORNER.value
+        solution = solve(shape, pieces)
+        print(solution)
+
+
+    cProfile.run('main()', sort=SortKey.CUMULATIVE)

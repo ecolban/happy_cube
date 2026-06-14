@@ -1,10 +1,13 @@
+import sys
 from enum import Enum
 from itertools import chain
+from pathlib import Path
 from random import shuffle, randrange, sample
 from time import perf_counter
 
 import pytest
 
+sys.path.append(str(Path(__file__).parent.parent / 'src'))
 from kata_part_3_solution import solve, filter_pieces
 from preloaded import Pads, Shapes, check_solution
 
@@ -85,8 +88,8 @@ def print_solution(solution):
 
 
 def shape_shuffle(
-        shape: list[tuple[int, int, int, int]],
-        hints: list[tuple[int, str, int, str]] | None = None,
+    shape: list[tuple[int, int, int, int]],
+    hints: list[tuple[int, str, int, str]] | None = None,
 ) -> tuple[list[tuple[int, int, int, int]], list[tuple[int, str, int, str]]]:
     hints = hints or []
     num_tiles = len(shape)
@@ -95,7 +98,8 @@ def shape_shuffle(
     res = {}
     for tile, neighbors in enumerate(shape):
         res[permutation[tile]] = tuple(permutation[j] for j in neighbors)
-    hints_map = {permutation[tile]: rest for tile, *rest in hints}
+    hints_map = {permutation[tile]: (color, index, orientation_str)
+                 for tile, color, index, orientation_str in hints}
     for tile, neighbors in res.items():
         k = randrange(4)
         if k > 0:
@@ -183,16 +187,16 @@ def test_solution_2x2x2_cube_w_2_inverted_vertices():
         print()
         for subset in subsets:
             start = perf_counter()
-            solution = solve(shape, subset, tack_stitches=tack_stitches)
+            solution = solve(shape, list(subset), tack_stitches=tack_stitches)
             end = perf_counter()
-            # assert solution
+            assert solution
             # print_solution(solution)
             if solution:
-                necessary = necessary.intersection(subset)
                 print(f"Time = {round((end - start) * 1000)} ms")
                 errors = check_solution(shape, set(pieces), [], solution, tack_stitches=tack_stitches)
                 assert not errors, '\n'.join(errors)
-        print(necessary)
+                necessary = necessary.intersection(subset)
+        print(len(necessary), sorted(necessary))
 
 
 def test_solution_3d_cross():
@@ -233,7 +237,6 @@ def test_solution_3d_cross():
         # hints = sample(_solution, 6)
         hints = []
         shape, hints = shape_shuffle(_shape, hints=hints)
-        # hints = []
         pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
         solution = solve(shape, pieces, hints=hints)
         assert solution
