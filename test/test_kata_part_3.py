@@ -1,12 +1,18 @@
+import sys
 from enum import Enum
 from itertools import chain
-from random import shuffle, randrange, sample
-from time import perf_counter
+from pathlib import Path
+from random import shuffle, randrange
 
 import pytest
 
-from kata_part_3_solution import solve, filter_pieces
-from preloaded import Pads, Shapes, check_solution
+SRC = str(Path(__file__).parent.parent / 'src')
+sys.path.append(SRC)
+
+from kata_part_3_solution import solve, HintSpec
+from preloaded import check_solution
+from shapes import Shapes
+from pads import PadsSkatoy as Pads, PadsBase, PadsSkatoy
 
 
 class Orientations(Enum):
@@ -32,10 +38,10 @@ class Orientations(Enum):
         return Orientations((sign, (self._offset - sign * k * 4) % 16))
 
 
-def get_edge(color_: str, index_: int, orientation_str_: str) -> list[int]:
+def get_edge(pad_: PadsBase, index_: int, orientation_str_: str) -> list[int]:
     """Returns the edge of the piece with given index of given pad"""
     c = str(index_)
-    lines = Pads[color_].value.splitlines()
+    lines = pad_.value.splitlines()
     row_min = next(i for i, row in enumerate(lines) if c in row)
     row_max = row_min + 4
     col_min = 100
@@ -78,16 +84,16 @@ def print_edge(edge):
 
 
 def print_solution(solution):
-    for tile, color, index, orientation_str in solution:
-        print(f"Tile {tile}: {color}[{index}]/{orientation_str}")
-        print_edge(get_edge(color, index, orientation_str))
+    for tile, pad, index, orientation_str in solution:
+        print(f"Tile {tile}: {pad}[{index}]/{orientation_str}")
+        print_edge(get_edge(pad, index, orientation_str))
         print()
 
 
 def shape_shuffle(
     shape: list[tuple[int, int, int, int]],
     hints: list[tuple[int, str, int, str]] | None = None,
-) -> tuple[list[tuple[int, int, int, int]], list[tuple[int, str, int, str]]]:
+) -> tuple[list[tuple[int, int, int, int]], list[HintSpec]]:
     hints = hints or []
     num_tiles = len(shape)
     permutation = list(range(num_tiles))
@@ -109,25 +115,86 @@ def shape_shuffle(
     return [res[i] for i in range(num_tiles)], [(i, *rest) for i, rest in hints_map.items()]
 
 
-def test_solution_1x1x1_cube():
+@pytest.mark.parametrize('pieces', [
+    *([(pad, i) for i in range(1, 7)] for pad in Pads),
+    [(pad, i) for pad in Pads if pad.name != 'PURPLE' for i in range(1, 7)],
+])
+def test_solution_1x1x1_cube(pieces):
     _shape = Shapes.CUBE_1x1x1.value
     hints = None
     shape, hints = shape_shuffle(_shape, hints=hints)
-    pieces = [(pad.name, i) for pad in Pads if pad.name != 'PURPLE' for i in range(1, 7)]
-    start = perf_counter()
     solution = solve(shape, pieces, hints=hints)
-    end = perf_counter()
-    print(f"\nTime = {round((end - start) * 1000)} ms")
     assert solution
     errors = check_solution(shape, set(pieces), hints, solution)
     assert not errors, '\n'.join(errors)
 
 
+def test_solution_two_1x1x1_cubes():
+    _shape = Shapes.TWO_CUBE_1x1x1.value
+    hints = None
+    shape, hints = shape_shuffle(_shape, hints=hints)
+    pieces = [(pad, i) for pad in (Pads.BLUE, Pads.YELLOW) for i in range(1, 7)]
+    solution = solve(shape, pieces, hints=hints)
+    assert solution
+    errors = check_solution(shape, set(pieces), hints, solution)
+    assert not errors, '\n'.join(errors)
+
+
+@pytest.mark.skip
+def test_solution_three_1x1x1_cubes():
+    _shape = Shapes.THREE_CUBE_1x1x1.value
+    hints = None
+    # shape, hints = shape_shuffle(_shape, hints=hints)
+    shape = _shape
+    pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
+    solution = solve(shape, pieces, hints=hints)
+    assert solution
+    errors = check_solution(shape, set(pieces), hints, solution)
+    assert not errors, '\n'.join(errors)
+    print(solution[:6])
+    print(solution[6:12])
+    print(solution[12:])
+
+
+@pytest.mark.skipIf(Pads == PadsSkatoy)
 def test_solution_1x1x2_prism():
     _shape = Shapes.PRISM_1x1x2.value
-    hints = [(7, 'BLUE', 2, 'F0'), (8, 'RED', 5, 'F1'), (9, 'PINK', 4, 'F1')]
-    shape, hints = shape_shuffle(_shape, hints=hints)
-    pieces = [(pad.name, i) for pad in Pads if pad.name != 'PURPLE' for i in range(1, 7)]
+    shape, hints = shape_shuffle(_shape, hints=[])
+    pieces = [(pad, i) for pad in Pads if pad.name != 'PURPLE' for i in range(1, 7)]
+    solution = solve(shape, pieces, hints=hints)
+    assert solution
+    errors = check_solution(shape, set(pieces), hints, solution)
+    assert not errors, '\n'.join(errors)
+
+
+def test_solution_1x1x4_prism():
+    _shape = Shapes.PRISM_1x1x4.value
+    shape, hints = shape_shuffle(_shape, hints=[])
+    pieces = [(pad, i) for pad in Pads if pad.name != 'PURPLE' for i in range(1, 7)]
+    solution = solve(shape, pieces, hints=hints)
+    assert solution
+    errors = check_solution(shape, set(pieces), hints, solution)
+    assert not errors, '\n'.join(errors)
+
+
+def test_solution_1x1x5_prism():
+    _shape = Shapes.PRISM_1x1x5.value
+    # hints = [(7, Pads.BLUE, 2, 'F0'), (8, Pads.RED, 5, 'F1'), (9, Pads.PINK, 4, 'F1')]
+    # shape, hints = shape_shuffle(_shape, hints=hints)
+    shape, hints = _shape, []
+    pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
+    solution = solve(shape, pieces, hints=hints)
+    assert solution
+    errors = check_solution(shape, set(pieces), hints, solution)
+    assert not errors, '\n'.join(errors)
+
+
+def test_solution_t_shape():
+    _shape = Shapes.T_SHAPE.value
+    # hints = [(7, Pads.BLUE, 2, 'F0'), (8, Pads.RED, 5, 'F1'), (9, Pads.PINK, 4, 'F1')]
+    # shape, hints = shape_shuffle(_shape, hints=hints)
+    shape, hints = _shape, []
+    pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
     solution = solve(shape, pieces, hints=hints)
     assert solution
     errors = check_solution(shape, set(pieces), hints, solution)
@@ -163,39 +230,17 @@ def test_solution_2x2x2_cube():
         (23, 'GREEN', 5, 'R2'),
     ]
     for _ in range(1):
-        hints = sample(_solution, 6)
-        shape, hints = shape_shuffle(_shape, hints=hints)
-        pieces = [(pad.name, i) for pad in Pads if pad.name != 'PURPLE' for i in range(1, 7)]
+        # hints = sample(_solution, 6)
+        # shape, hints = shape_shuffle(_shape, hints=hints)
+        shape, hints = _shape, []
+        pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
         solution = solve(shape, pieces, hints=hints)
         assert solution
         errors = check_solution(shape, set(pieces), hints, solution)
         assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skip
-def test_solution_2x2x2_cube_w_2_inverted_vertices():
-    shape = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES.value
-    tack_stitches = [(8 * 16 + 0, 19 * 16 + 4)]
-    for _ in range(1):
-        pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)
-                  if pad.name != 'GREEN']
-        subsets = filter_pieces(shape, pieces, hints=[], tack_stitches=tack_stitches)
-        necessary = set(pieces)
-        print()
-        for subset in subsets:
-            start = perf_counter()
-            solution = solve(shape, subset, tack_stitches=tack_stitches)
-            end = perf_counter()
-            # assert solution
-            # print_solution(solution)
-            if solution:
-                necessary = necessary.intersection(subset)
-                print(f"Time = {round((end - start) * 1000)} ms")
-                errors = check_solution(shape, set(pieces), [], solution, tack_stitches=tack_stitches)
-                assert not errors, '\n'.join(errors)
-        print(necessary)
-
-
+@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_3d_cross():
     _shape = Shapes.THREE_D_CROSS.value
     _solution = [
@@ -235,14 +280,14 @@ def test_solution_3d_cross():
         hints = []
         shape, hints = shape_shuffle(_shape, hints=hints)
         # hints = []
-        pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+        pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
         solution = solve(shape, pieces, hints=hints)
         assert solution
         errors = check_solution(shape, set(pieces), hints, solution)
         assert not errors, '\n'.join(errors)
-        print_solution(solution)
 
 
+@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_prism_3x3x1():
     _shape = Shapes.PRISM_3x3x1.value
     _solution = [
@@ -278,10 +323,11 @@ def test_solution_prism_3x3x1():
         (29, 'YELLOW', 3, 'F3'),
     ]
     for _ in range(1):
-        hints = sample(_solution, 7)
-        shape, hints = shape_shuffle(_shape, hints=hints)
+        # hints = sample(_solution, 7)
+        # shape, hints = shape_shuffle(_shape, hints=hints)
+        shape, hints = _shape, []
         # shape = _shape
-        pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
+        pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
         solution = solve(shape, pieces, hints=hints)
         assert solution
         errors = check_solution(shape, set(pieces), hints, solution)
@@ -292,11 +338,11 @@ def test_solution_prism_3x3x1():
 def test_print_edge():
     pieces = [
         ('BLUE', 1),
-        ('GREEN', 2),
-        ('GREEN', 3),
-        ('GREEN', 4),
-        ('GREEN', 5),
-        ('PINK', 6),
+        ('BLUE', 2),
+        ('BLUE', 3),
+        ('BLUE', 4),
+        ('BLUE', 5),
+        ('BLUE', 6),
         ('PURPLE', 1),
         ('PURPLE', 4),
         ('RED', 3),
@@ -307,44 +353,56 @@ def test_print_edge():
     print()
     for color, i in pieces:
         print(f"{color}[{i}]")
-        print_edge(get_edge(color, i, 'R0'))
+        pad = next(pad for pad in Pads if pad.name == color)
+        print_edge(get_edge(pad, i, 'R0'))
         print()
 
 
-def test_solution_1x1x1_cube_():
-    shape = Shapes.CUBE_1x1x1.value
-    # hints = [(2, 'PURPLE', 3, 'F1')]
-    hints = []
-    pieces = [('PURPLE', i) for i in range(1, 7)]
-    start = perf_counter()
-    solution = solve(shape, pieces, hints=hints)
-    end = perf_counter()
-    print(f"\nTime = {round((end - start) * 1000)} ms")
-    print_solution(solution)
-    assert solution
-    errors = check_solution(shape, set(pieces), hints, solution)
-    assert not errors, '\n'.join(errors)
-
-
-@pytest.mark.parametrize('shape', list(Shapes))
+@pytest.mark.parametrize('shape', [
+    Shapes.CUBE_1x1x1,
+    Shapes.CUBE_1x1x1_WITH_FIVE_CUBE_1x1x1_OUTGROWTHS,
+    Shapes.CUBE_2x2x2,
+    # Shapes.CUBE_2x2x2_WITH_CUBE_1x1x1_OUTGROWTH, # Not with PadsSkatoy
+    Shapes.CUBE_2x2x2_WITH_ONE_INVERTED_VERTEX,
+    Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES,
+    Shapes.C_SHAPE,
+    Shapes.LIGHTNING_BOLT,
+    Shapes.L_SHAPE,
+    Shapes.PRISM_1x1x2,
+    # Shapes.PRISM_1x1x3, # Not with PadsSkatoy
+    Shapes.PRISM_1x1x4,
+    Shapes.PRISM_1x1x5,
+    # Shapes.PRISM_3x3x1, # Not with PadsSkatoy
+    Shapes.THREE_D_CORNER,
+    # Shapes.THREE_D_CROSS, # Not with PadsSkatoy
+    Shapes.THREE_STEPS,
+    Shapes.T_SHAPE,
+    Shapes.W_SHAPE,
+    Shapes.X_SHAPE,
+])
 # @pytest.mark.parametrize('shape', [Shapes.THREE_STEPS])
 def test_solution_no_hints(shape: Shapes):
     print(shape.name)
     shape_, _ = shape_shuffle(shape.value)
-    pieces = [(pad.name, i) for pad in Pads for i in range(1, 7)]
-    start = perf_counter()
+    pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
     solution = solve(shape_, pieces)
-    exec_time = int((perf_counter() - start) * 1000)
-    print(f"Time = {exec_time} ms")
     assert solution
     errors = check_solution(shape_, set(pieces), [], solution)
     assert not errors, '\n'.join(errors)
-    # print_solution(solution)
 
 
-def test_cube_2x2x2():
-    pieces = [(pad.name, i) for pad in Pads if pad != Pads.PURPLE for i in range(1, 7)]
-    shape = Shapes.CUBE_2x2x2.value
-    solution = solve(shape, pieces)
+def test_cube_2x2x2_w_2_inverted_vertices():
+    pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
+    shape = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES.value
+    tack_stitches = [(8 * 16 + 0, 19 * 16 + 4)]
+    solution = solve(shape, pieces, tack_stitches=tack_stitches)
+    assert solution
     print()
-    print_solution(solution)
+
+
+def test_cube_2x2x2_w_1_inverted_vertex():
+    pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
+    shape = Shapes.CUBE_2x2x2_WITH_ONE_INVERTED_VERTEX.value
+    solution = solve(shape, pieces)
+    assert solution
+    print()

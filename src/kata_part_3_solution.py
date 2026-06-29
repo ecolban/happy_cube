@@ -1,14 +1,22 @@
 import signal
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator, Sequence
 from enum import Enum
 from functools import cache, wraps
 from itertools import chain
 from random import shuffle
+from typing import Any, ParamSpec, TypeVar
 
 from rust_dlx_lib import solve_dlx as solve_dlx_rs
-from exact_cover import solve_dlx as solve_dlx_py
 
-from preloaded import Pads, Shapes
+from pads import PadsBase, PadsDublin
+from shapes import Shapes
+
+PieceSpec = tuple[PadsBase, int]
+HintSpec = tuple[int, PadsBase, int, str]
+SolutionSpec = list[tuple[int, PadsBase, int, str]]
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class Orientations(Enum):
@@ -21,18 +29,18 @@ class Orientations(Enum):
     F2 = (-1, 12)
     F3 = (-1, 0)
 
-    def __init__(self, direction: int, offset: int):
+    def __init__(self, direction: int, offset: int) -> None:
         self._indexes = [(offset + direction * i) % 16 for i in range(16)]
 
-    def apply_to(self, edge: list[int]):
+    def apply_to(self, edge: list[int]) -> Iterator[int]:
         return (edge[i] for i in self._indexes)
 
 
 @cache
-def get_edge(color: str, index: int) -> list[int]:
+def get_edge(pad: PadsBase, index: int) -> list[int]:
     """Returns the edge of the piece with given index of given pad"""
     c = str(index)
-    lines = Pads[color].value.splitlines()
+    lines = pad.value.splitlines()
     row_min = next(i for i, row in enumerate(lines) if c in row)
     row_max = row_min + 4
     col_min = min(next(j for j, v in enumerate(row) if v == c) for row in lines[row_min: row_max + 1])
@@ -46,20 +54,20 @@ def get_edge(color: str, index: int) -> list[int]:
 
 
 def get_shape_slots(
-        tiles: list[tuple[int, int, int, int]],
-        tack_stitches: list[tuple[int, int]] | None = None,
+    tiles: list[tuple[int, int, int, int]],
+    tack_stitches: list[tuple[int, int]] | None = None,
 ) -> list[int]:
     num_tiles = len(tiles)
     res = list(range(num_tiles * 16))
 
-    def find(i):
+    def find(i: int) -> int:
         if res[i] == i:
             return i
         root = find(res[i])
         res[i] = root
         return root
 
-    def union(i, j):
+    def union(i: int, j: int) -> None:
         i = find(i)
         j = find(j)
         if i != j:
@@ -84,26 +92,26 @@ def get_shape_slots(
 
 
 def filter_pieces(
-        shape: list[tuple[int, int, int, int]],
-        pieces: list[tuple[str, int]],
-        hints: list[tuple[int, str, int, str]] | None = None,
-        tack_stitches: list[tuple[int, int]] = None,
-) -> Generator[tuple[tuple[str, int]], None, None]:
+    shape: list[tuple[int, int, int, int]],
+    pieces: Sequence[PieceSpec],
+    hints: list[HintSpec] | None = None,
+    tack_stitches: list[tuple[int, int]] | None = None,
+) -> Generator[tuple[PieceSpec], None, None]:
     hints = hints or []
     slots = get_shape_slots(shape, tack_stitches)
     num_tiles = len(shape)
     corners = {slots[tile * 16 + i] for tile in range(num_tiles) for i in range(0, 16, 4)}
     num_corners = len(corners)
-    piece_map = {(color, index): (sum(i for i in edge[0::4]), sum(i for i in edge[2::4]), sum(i for i in edge[1::2]))
-                 for color, index in pieces for edge in (get_edge(color=color, index=index),)}
+    piece_map = {(pad, index): (sum(i for i in edge[0::4]), sum(i for i in edge[2::4]), sum(i for i in edge[1::2]))
+                 for pad, index in pieces for edge in (get_edge(pad, index),)}
     # cubit totals contributed by hints
-    hints_cubits = tuple(sum(piece_map[(color, index)][i] for _, color, index, _ in hints) for i in range(3))
+    hints_cubits = tuple(sum(piece_map[(pad, index)][i] for _, pad, index, _ in hints) for i in range(3))
 
     target_pieces = num_tiles - len(hints)
     target_corners = num_corners - hints_cubits[0]
     target_mid = 2 * num_tiles - hints_cubits[1]
     target_other = 4 * num_tiles - hints_cubits[2]
-    pieces_in_hints = {(color, index) for _, color, index, _ in hints}
+    pieces_in_hints = {(pad, index) for _, pad, index, _ in hints}
     pieces = [piece for piece in pieces if piece not in pieces_in_hints]
     n = len(pieces)
     # noinspection PyArgumentList
@@ -175,19 +183,19 @@ def filter_pieces(
 class Problem:
 
     def __init__(
-            self,
-            shape: list[tuple[int, int, int, int]],
-            pieces: list[tuple[str, int]],
-            hints: list[tuple[int, str, int, str]],
-            tack_stitches: list[tuple[int, int]],
-    ):
+        self,
+        shape: list[tuple[int, int, int, int]],
+        pieces: Sequence[PieceSpec],
+        hints: list[HintSpec],
+        tack_stitches: list[tuple[int, int]],
+    ) -> None:
         self._num_tiles: int = len(shape)
-        self._pieces: list[tuple[str, int]] = pieces
+        self._pieces: Sequence[PieceSpec] = pieces
         self._slots: list[int] = get_shape_slots(shape, tack_stitches)
-        self._hints: list[tuple[int, str, int, str]] = hints
+        self._hints: list[HintSpec] = hints
         self._row_mapping = {}
 
-    def solve(self):
+    def solve(self) -> SolutionSpec | None:
         pieces = [p for p in self._pieces]
         shuffle(pieces)
         slots = set(self._slots)
@@ -197,11 +205,11 @@ class Problem:
         row_index = 0
         for tile in range(self._num_tiles):
             hint = next((h for h in self._hints if h[0] == tile), None)
-            _, hint_color, hint_index, hint_orientation = hint if hint else (None, None, None, None)
-            for piece_column, (color, index) in enumerate(pieces, start=len(slots)):
-                if hint is not None and (color, index) != (hint_color, hint_index):
+            _, hint_pad, hint_index, hint_orientation = hint if hint else (None, None, None, None)
+            for piece_column, (pad, index) in enumerate(pieces, start=len(slots)):
+                if hint is not None and (pad, index) != (hint_pad, hint_index):
                     continue
-                edge = get_edge(color, index)
+                edge = get_edge(pad, index)
                 rows_for_piece = set()
                 for orientation in Orientations:
                     if hint is not None and orientation.name != hint_orientation:
@@ -216,39 +224,47 @@ class Problem:
                         continue
                     rows_for_piece.add(tuple(row))
                     rows.append(row)
-                    self._row_mapping[(tile, color, index, orientation.name)] = row_index
+                    self._row_mapping[(tile, pad, index, orientation.name)] = row_index
                     row_index += 1
         clues = [self._row_mapping[hint] for hint in self._hints]
-        solution = solve_dlx_py(columns=columns, rows=rows, clues=clues)
+        solution = solve_dlx_rs(columns=columns, rows=rows, clues=clues)
         if solution:
             inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
             return sorted(inv_row_mapping[i] for i in solution)
+        return None
 
 
 def solve(
-        shape: list[tuple[int, int, int, int]],
-        pieces: list[tuple[str, int]],
-        hints: list[tuple[int, str, int, str]] | None = None,
-        tack_stitches: list = None,
-):
+    shape: list[tuple[int, int, int, int]],
+    pieces: Sequence[PieceSpec],
+    hints: list[HintSpec] | None = None,
+    tack_stitches: list | None = None,
+) -> SolutionSpec | None:
+    pieces_ = pieces
+    hints_ = hints or []
+
     @time_guard(timeout=1)  # timeout in seconds
-    def _solve():
-        if len(pieces) > len(shape):
-            hint_pieces = [(color, index) for (_, color, index, _) in hints] if hints else []
-            piece_subsets: Generator[tuple[tuple[str, int]], None, None] = filter_pieces(shape, pieces, hints=hints,
-                                                                                         tack_stitches=tack_stitches)
+    def _solve() -> SolutionSpec | None:
+        if len(pieces_) > len(shape):
+            hint_pieces = [(pad, index) for (_, pad, index, _) in hints_]
+            piece_subsets: Generator[tuple[PieceSpec], None, None] = filter_pieces(
+                shape,
+                pieces_,
+                hints=hints_,
+                tack_stitches=tack_stitches,
+            )
             for piece_subset in piece_subsets:
                 solution_ = Problem(
                     shape,
                     list(piece_subset) + hint_pieces,
-                    hints or [],
+                    hints_,
                     tack_stitches or []
                 ).solve()
                 if solution_:
                     return solution_
             return None
         else:
-            return Problem(shape, pieces, hints or [], tack_stitches or []).solve()
+            return Problem(shape, pieces_, hints_, tack_stitches or []).solve()
 
     for tries in range(6):
         try:
@@ -258,17 +274,17 @@ def solve(
     return None
 
 
-def timeout_handler(_signum, _frame):
+def timeout_handler(_signum: int, _frame: Any) -> None:
     raise TimeoutError()
 
 
-def time_guard(timeout: int = 1):
+def time_guard(timeout: int = 1) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """A decorator that raises an TimeoutError after `timeout` seconds unless the
     decorated function hasn't already returned."""
 
-    def decorator(f):
+    def decorator(f: Callable[P, R]) -> Callable[P, R]:
         @wraps(f)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(timeout)
             try:
@@ -287,8 +303,8 @@ if __name__ == '__main__':
     from pstats import SortKey
 
 
-    def main():
-        pieces = [(pad.name, i) for pad in Pads if pad != Pads.PURPLE for i in range(1, 7)]
+    def main() -> None:
+        pieces = [(pad, i) for pad in PadsDublin if pad != PadsDublin.PURPLE for i in range(1, 7)]
         shape = Shapes.THREE_D_CORNER.value
         solution = solve(shape, pieces)
         print(solution)

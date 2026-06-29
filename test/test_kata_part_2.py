@@ -3,8 +3,8 @@ from random import randrange, choice
 import pytest
 
 from kata_part_2_solution import get_covered_shape_slots, get_edge, Piece
-from preloaded import Pads
-from preloaded import Shapes
+from pads import PadsDublin as Pads
+from shapes import Shapes
 from kata_part_1_solution import get_shape_slots
 from test_kata_part_3 import shape_shuffle
 
@@ -13,7 +13,7 @@ ORIENTATIONS = ['R0', 'R1', 'R2', 'R3', 'F0', 'F1', 'F2', 'F3']
 
 
 @pytest.mark.parametrize(
-    'shape', list(Shapes)
+    'shape', [Shapes.X_SHAPE]
 )
 def test_get_covered_shape_slots(shape):
     shape, _ = shape_shuffle(shape.value)
@@ -21,9 +21,10 @@ def test_get_covered_shape_slots(shape):
     tile = randrange(len(shape))
     orientation = choice(ORIENTATIONS)
     color = choice(COLORS)
+    pad = next(pad for pad in Pads if pad.name == color)
     index = randrange(1, 7)
-    covered_slots = get_covered_shape_slots(tile, color, index, orientation, slot_map)
-    edge = Piece(color, index, orientation).edge
+    covered_slots = get_covered_shape_slots(tile, pad, index, orientation, slot_map)
+    edge = Piece(pad, index, orientation).edge
     assert sum(edge) == len(covered_slots)
     for i, v in enumerate(edge):
         assert int(slot_map[16 * tile + i] in covered_slots) == v

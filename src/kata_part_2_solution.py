@@ -3,7 +3,7 @@ from enum import Enum, auto
 from functools import cache
 from itertools import chain
 
-from preloaded import Pads
+from pads import PadsDublin as Pads
 
 
 class Orientations(Enum):
@@ -18,11 +18,11 @@ class Orientations(Enum):
 
 
 class Piece:
-    def __init__(self, color: str, index: int, orientation: str = Orientations.R0.name):
-        self._color = color
+    def __init__(self, pad: Pads, index: int, orientation: str = Orientations.R0.name):
+        self._pad = pad
         self._index = index
         self._orientation = Orientations[orientation]
-        self._edge: list[int] = list(get_edge(Pads[color], index))
+        self._edge: list[int] = list(get_edge(pad, index))
 
     @property
     def edge(self):
@@ -71,10 +71,10 @@ def get_edge(pad: Pads, index: int) -> Iterable[int]:
 
 def get_covered_shape_slots(
         tile: int,
-        color: str,
+        pad: Pads,
         index: int,
         orientation: str,
         slot_map: list[int],
 ) -> list[int]:
-    piece = Piece(color, index, orientation)
+    piece = Piece(pad, index, orientation)
     return sorted(slot_map[16 * tile + i] for i, v in enumerate(piece.edge) if v)
