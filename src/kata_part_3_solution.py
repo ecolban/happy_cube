@@ -1,15 +1,16 @@
-import signal
-from collections.abc import Callable, Generator, Iterator, Sequence
+from collections.abc import Generator, Iterator, Sequence
 from enum import Enum
-from functools import cache, wraps
+from functools import cache
 from itertools import chain
 from random import shuffle
 from typing import Any, ParamSpec, TypeVar
 
-from rust_dlx_lib import solve_dlx as solve_dlx_rs
+from rust_dlx_lib import DlxSolver
+# from dlx_solver import DlxSolver
 
 from pads import PadsBase, PadsDublin
 from shapes import Shapes
+from time_guard import time_guard
 
 PieceSpec = tuple[PadsBase, int]
 HintSpec = tuple[int, PadsBase, int, str]
@@ -195,7 +196,7 @@ class Problem:
         self._hints: list[HintSpec] = hints
         self._row_mapping = {}
 
-    def solve(self) -> SolutionSpec | None:
+    def solve(self) -> Iterator[SolutionSpec]:
         pieces = [p for p in self._pieces]
         shuffle(pieces)
         slots = set(self._slots)
@@ -227,11 +228,10 @@ class Problem:
                     self._row_mapping[(tile, pad, index, orientation.name)] = row_index
                     row_index += 1
         clues = [self._row_mapping[hint] for hint in self._hints]
-        solution = solve_dlx_rs(columns=columns, rows=rows, clues=clues)
-        if solution:
+        solver = DlxSolver(columns=columns, rows=rows, clues=clues)
+        for solution in solver:
             inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
-            return sorted(inv_row_mapping[i] for i in solution)
-        return None
+            yield sorted(inv_row_mapping[i] for i in solution)
 
 
 def solve(
@@ -239,63 +239,51 @@ def solve(
     pieces: Sequence[PieceSpec],
     hints: list[HintSpec] | None = None,
     tack_stitches: list | None = None,
-) -> SolutionSpec | None:
+) -> Iterator[SolutionSpec]:
     pieces_ = pieces
     hints_ = hints or []
 
-    @time_guard(timeout=1)  # timeout in seconds
-    def _solve() -> SolutionSpec | None:
-        if len(pieces_) > len(shape):
-            hint_pieces = [(pad, index) for (_, pad, index, _) in hints_]
-            piece_subsets: Generator[tuple[PieceSpec], None, None] = filter_pieces(
+    # @time_guard(timeout=1)  # timeout in seconds
+    if len(pieces_) > len(shape):
+        hint_pieces = [(pad, index) for (_, pad, index, _) in hints_]
+        piece_subsets: Generator[tuple[PieceSpec], None, None] = filter_pieces(
+            shape,
+            pieces_,
+            hints=hints_,
+            tack_stitches=tack_stitches,
+        )
+        for piece_subset in piece_subsets:
+            yield from Problem(
                 shape,
-                pieces_,
-                hints=hints_,
-                tack_stitches=tack_stitches,
-            )
-            for piece_subset in piece_subsets:
-                solution_ = Problem(
-                    shape,
-                    list(piece_subset) + hint_pieces,
-                    hints_,
-                    tack_stitches or []
-                ).solve()
-                if solution_:
-                    return solution_
-            return None
-        else:
-            return Problem(shape, pieces_, hints_, tack_stitches or []).solve()
+                list(piece_subset) + hint_pieces,
+                hints_,
+                tack_stitches or []
+            ).solve()
+    else:
+        yield from Problem(shape, pieces_, hints_, tack_stitches or []).solve()
 
-    for tries in range(6):
+
+def solve_one(
+    shape: list[tuple[int, int, int, int]],
+    pieces: Sequence[PieceSpec],
+    hints: list[HintSpec] | None = None,
+    tack_stitches: list | None = None,
+) -> SolutionSpec:
+
+    @time_guard()
+    def _solve_one():
+        return next(solve(shape, pieces, hints, tack_stitches))
+
+    for _ in range(6):
         try:
-            return _solve()
+            return _solve_one()
         except TimeoutError:
-            pass
-    return None
+            continue
+    raise TimeoutError("Failed to solve within the allowed attempts")
 
 
 def timeout_handler(_signum: int, _frame: Any) -> None:
     raise TimeoutError()
-
-
-def time_guard(timeout: int = 1) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """A decorator that raises an TimeoutError after `timeout` seconds unless the
-    decorated function hasn't already returned."""
-
-    def decorator(f: Callable[P, R]) -> Callable[P, R]:
-        @wraps(f)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout)
-            try:
-                result = f(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-            return result
-
-        return wrapper
-
-    return decorator
 
 
 if __name__ == '__main__':
@@ -306,7 +294,7 @@ if __name__ == '__main__':
     def main() -> None:
         pieces = [(pad, i) for pad in PadsDublin if pad != PadsDublin.PURPLE for i in range(1, 7)]
         shape = Shapes.THREE_D_CORNER.value
-        solution = solve(shape, pieces)
+        solution = next(solve(shape, pieces))
         print(solution)
 
 

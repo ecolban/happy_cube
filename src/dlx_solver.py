@@ -12,20 +12,17 @@ class Node(object):
         self.column = column
         self.row_idx = row_idx
 
-    @staticmethod
-    def row_iterator(node, reverse=False):
-        """Iterates through all the nodes in a row."""
-        start_node = node
-        node = node.left if reverse else node.right
+    def row_iterator(self, reverse=False):
+        start_node = self
+        node = self.left if reverse else self.right
         while node != start_node:
             yield node
             node = node.left if reverse else node.right
 
-    @staticmethod
-    def column_iterator(node, reverse=False):
+    def column_iterator(self, reverse=False):
         """Iterates through all the nodes in a column."""
-        start_node = node
-        node = node.up if reverse else node.down
+        start_node = self
+        node = self.up if reverse else self.down
         while node != start_node:
             yield node
             node = node.up if reverse else node.down
@@ -43,9 +40,12 @@ class Head(Node):
         super().__init__(self, self, self, self)
 
 
-class ExactCover:
+Solution = list[int]  # a list of the indices of the selected rows
 
-    def __init__(self, columns: Iterable[bool], rows: Iterable[Iterable[int]], clues: Iterable[int] | None= None):
+
+class DlxSolver(Iterable[Solution]):
+
+    def __init__(self, columns: Iterable[bool], rows: Iterable[Iterable[int]], clues: Iterable[int] | None = None):
         super().__init__()
         if clues is None:
             clues = []
@@ -86,48 +86,45 @@ class ExactCover:
             left_node.right = first_node
             first_node.left = left_node
         self._head = head
-
-    @property
-    def head(self):
-        return self._head
+        self._solutions = self._gen_solutions()
 
     @staticmethod
-    def cover(column):
+    def _cover(column):
         column.right.left, column.left.right = column.left, column.right
-        for i in Node.column_iterator(column):
-            for j in Node.row_iterator(i):
+        for i in column.column_iterator():
+            for j in i.row_iterator():
                 j.up.down, j.down.up = j.down, j.up
                 if j.column.primary:
                     j.column.size -= 1
 
     @staticmethod
-    def uncover(column):
-        for i in Node.column_iterator(column, reverse=True):
-            for j in Node.row_iterator(i, reverse=True):
+    def _uncover(column):
+        for i in column.column_iterator(reverse=True):
+            for j in i.row_iterator(reverse=True):
                 if j.column.primary:
                     j.column.size += 1
                 j.up.down, j.down.up = j, j
         column.left.right, column.right.left = column, column
 
-    def node_by_idx(self, row_idx_):
-        for column_head in Node.row_iterator(self._head):
-            for node in Node.column_iterator(column_head):
+    def _node_by_idx(self, row_idx_):
+        for column_head in self._head.row_iterator():
+            for node in column_head.column_iterator():
                 if node.row_idx == row_idx_:
                     return node
         raise IndexError
 
-    def solve(self):
+    def _gen_solutions(self):
         solution = []
-        for node in (self.node_by_idx(i) for i in self._clues):
-            self.cover(node.column)
+        for node in (self._node_by_idx(i) for i in self._clues):
+            self._cover(node.column)
             solution.append(node)
-            for j in Node.row_iterator(node):
-                self.cover(j.column)
+            for j in node.row_iterator():
+                self._cover(j.column)
 
         def search():
 
             try:
-                selected_column = min((c for c in Node.row_iterator(self._head) if c.primary), key=lambda c: c.size)
+                selected_column = min((c for c in self._head.row_iterator() if c.primary), key=lambda c: c.size)
             except ValueError:
                 # No more columns to cover; problem solved
                 yield [node.row_idx for node in solution]
@@ -135,18 +132,21 @@ class ExactCover:
                 if selected_column.size == 0:
                     # No rows left to cover selected_column; solution not found
                     return
-                self.cover(selected_column)
-                for node in Node.column_iterator(selected_column):
+                self._cover(selected_column)
+                for node in selected_column.column_iterator():
                     solution.append(node)
-                    for j in Node.row_iterator(node):
-                        self.cover(j.column)
+                    for j in node.row_iterator():
+                        self._cover(j.column)
                     yield from search()
                     node = solution.pop()
-                    for j in Node.row_iterator(node, reverse=True):
-                        self.uncover(j.column)
-                self.uncover(selected_column)
+                    for j in node.row_iterator(reverse=True):
+                        self._uncover(j.column)
+                self._uncover(selected_column)
 
         return search()
 
-def solve_dlx(columns: list[bool], rows: list[list[int]], clues: list[int] | None= None):
-    return next((ExactCover(columns, rows, clues).solve()), None)
+    def __next__(self):
+        return next(self._solutions)
+
+    def __iter__(self):
+        return self
