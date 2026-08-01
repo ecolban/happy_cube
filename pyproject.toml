@@ -1,0 +1,25 @@
+[project]
+name = "happy-cube"
+version = "0.1.0"
+description = "Happy Cube kata solutions and experiments."
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "click",
+    "pytest",
+    "pytest-asyncio",
+    "rust-dlx-lib",
+]
+
+[dependency-groups]
+dev = [
+    "ipython",
+]
+
+[tool.uv.sources]
+rust-dlx-lib = { path = "../rust_dlx_lib/target/wheels/rust_dlx_lib-0.1.1-cp314-cp314-macosx_11_0_arm64.whl" }
+
+[tool.uv.workspace]
+members = [
+    "help",
+]

@@ -2,7 +2,7 @@ from collections import defaultdict
 from enum import Enum
 from itertools import chain
 
-from kata_part_3_solution import PieceSpec, SolutionSpec
+from happy_cube_solver import PieceSpec, SolutionSpec
 from pads import PadsBase
 
 

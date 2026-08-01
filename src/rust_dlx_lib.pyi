@@ -1,9 +1,0 @@
-class DlxSolver:
-    def __init__(
-        self,
-        columns: list[bool],
-        rows: list[list[int]],
-        clues: list[int] | None,
-    ) -> None: ...
-    def __iter__(self) -> "DlxSolver": ...
-    def __next__(self) -> list[int]: ...

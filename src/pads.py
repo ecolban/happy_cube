@@ -38,7 +38,7 @@ class PadsBase(StrEnum):
         )
 
     def __iter__(self) -> Iterator[list[int]]:
-        return (self[i] for i in range(7))
+        return (self[i] for i in range(1, 7))
 
     def __str__(self) -> str:
         symbols = {

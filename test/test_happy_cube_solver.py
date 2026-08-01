@@ -9,8 +9,8 @@ import pytest
 SRC = str(Path(__file__).parent.parent / 'src')
 sys.path.append(SRC)
 
-from kata_part_3_solution import solve, HintSpec, solve_one
-from preloaded import check_solution
+from happy_cube_solver import solve, HintSpec, solve_one
+from happy_cube_solution_checker import check_solution
 from shapes import Shapes
 from pads import PadsDublin as Pads, PadsBase, PadsSkatoy
 
@@ -155,7 +155,7 @@ def test_solution_three_1x1x1_cubes():
     print(solution[12:])
 
 
-@pytest.mark.skipIf(Pads == PadsSkatoy)
+@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_1x1x2_prism():
     _shape = Shapes.PRISM_1x1x2.value
     shape, hints = shape_shuffle(_shape, hints=[])
