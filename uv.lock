@@ -62,7 +62,7 @@ requires-dist = [
     { name = "click" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "rust-dlx-lib", path = "../rust_dlx_lib/target/wheels/rust_dlx_lib-0.1.1-cp314-cp314-macosx_11_0_arm64.whl" },
+    { name = "rust-dlx-lib", path = "../rust_dlx_lib/target/wheels/rust_dlx_lib-0.1.3-cp314-cp314-macosx_11_0_arm64.whl" },
 ]
 
 [package.metadata.requires-dev]
@@ -264,10 +264,10 @@ wheels = [
 
 [[package]]
 name = "rust-dlx-lib"
-version = "0.1.1"
-source = { path = "../rust_dlx_lib/target/wheels/rust_dlx_lib-0.1.1-cp314-cp314-macosx_11_0_arm64.whl" }
+version = "0.1.3"
+source = { path = "../rust_dlx_lib/target/wheels/rust_dlx_lib-0.1.3-cp314-cp314-macosx_11_0_arm64.whl" }
 wheels = [
-    { filename = "rust_dlx_lib-0.1.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:cf33a536aa5ab9a5d401b3dca9f10b3e33f8b7e69ed2cddc391cff1080858a36" },
+    { filename = "rust_dlx_lib-0.1.3-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:a73dc519a7651e1fbe424e469978ad60256ea8cc8dc670de3f7ceda265cfef55" },
 ]
 
 [[package]]

@@ -3,10 +3,10 @@ from enum import Enum
 from functools import cache
 from itertools import chain
 from random import shuffle
-from typing import Any, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
 
-from rust_dlx_lib import DlxSolver
-# from dlx_solver import DlxSolver
+# from rust_dlx_lib import DlxSolver
+from py_dlx_solver import DlxSolver
 
 from pads import PadsBase, PadsDublin
 from shapes import Shapes
@@ -228,7 +228,7 @@ class Problem:
                     self._row_mapping[(tile, pad, index, orientation.name)] = row_index
                     row_index += 1
         clues = [self._row_mapping[hint] for hint in self._hints]
-        solver = DlxSolver(columns=columns, rows=rows, clues=clues)
+        solver = DlxSolver(rows=rows, clues=clues)
         for solution in solver:
             inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
             yield sorted(inv_row_mapping[i] for i in solution)
@@ -243,7 +243,6 @@ def solve(
     pieces_ = pieces
     hints_ = hints or []
 
-    # @time_guard(timeout=1)  # timeout in seconds
     if len(pieces_) > len(shape):
         hint_pieces = [(pad, index) for (_, pad, index, _) in hints_]
         piece_subsets: Generator[tuple[PieceSpec], None, None] = filter_pieces(
@@ -280,10 +279,6 @@ def solve_one(
         except TimeoutError:
             continue
     raise TimeoutError("Failed to solve within the allowed attempts")
-
-
-def timeout_handler(_signum: int, _frame: Any) -> None:
-    raise TimeoutError()
 
 
 if __name__ == '__main__':

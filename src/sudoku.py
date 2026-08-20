@@ -4,7 +4,7 @@ from random import shuffle, choice
 from time import perf_counter
 
 import click
-# from dlx_solver import DlxSolver
+# from py_dlx_solver import DlxSolver
 from rust_dlx_lib import DlxSolver
 
 
@@ -16,8 +16,6 @@ def solve_sudoku(clues=None):
     """
 
     # 324 primary constraints
-    columns = [True] * (4 * 9 * 9)
-
     def make_rows() -> list[list[int]]:
         offsets = [i * 9 * 9 for i in range(5)]
 
@@ -39,7 +37,7 @@ def solve_sudoku(clues=None):
     # clues = [row_idx(r, c, d)
     #          for r, row in enumerate(grid)
     #          for c, d in enumerate(row) if d]
-    solutions = DlxSolver(columns, rows, clues)
+    solutions = DlxSolver(rows, clues)
     return solutions
 
 
@@ -139,4 +137,5 @@ def _main(generate: int, retain: int):
 
 
 if __name__ == '__main__':
-    _main()
+    # _main()
+    main(10, 3)

@@ -29,9 +29,8 @@ class Node(object):
 
 
 class ColumnHead(Node):
-    def __init__(self, left, right, primary: bool = True):
+    def __init__(self, left, right):
         super().__init__(self, self, left, right)
-        self.primary = primary
         self.size = 0
 
 
@@ -45,7 +44,7 @@ Solution = list[int]  # a list of the indices of the selected rows
 
 class DlxSolver(Iterable[Solution]):
 
-    def __init__(self, columns: Iterable[bool], rows: Iterable[Iterable[int]], clues: Iterable[int] | None = None):
+    def __init__(self, rows: list[list[int]], clues: Iterable[int] | None = None):
         super().__init__()
         if clues is None:
             clues = []
@@ -54,8 +53,8 @@ class DlxSolver(Iterable[Solution]):
         head = Head()
         left_node = head
         column_heads: list[ColumnHead] = []
-        for primary in columns:
-            node = ColumnHead(left=left_node, right=None, primary=primary)
+        for _ in range(len(rows[0])):
+            node = ColumnHead(left=left_node, right=None)
             left_node.right = node
             left_node = node
             column_heads.append(node)
@@ -94,15 +93,13 @@ class DlxSolver(Iterable[Solution]):
         for i in column.column_iterator():
             for j in i.row_iterator():
                 j.up.down, j.down.up = j.down, j.up
-                if j.column.primary:
-                    j.column.size -= 1
+                j.column.size -= 1
 
     @staticmethod
     def _uncover(column):
         for i in column.column_iterator(reverse=True):
             for j in i.row_iterator(reverse=True):
-                if j.column.primary:
-                    j.column.size += 1
+                j.column.size += 1
                 j.up.down, j.down.up = j, j
         column.left.right, column.right.left = column, column
 
@@ -124,7 +121,7 @@ class DlxSolver(Iterable[Solution]):
         def search():
 
             try:
-                selected_column = min((c for c in self._head.row_iterator() if c.primary), key=lambda c: c.size)
+                selected_column = min((c for c in self._head.row_iterator()), key=lambda c: c.size)
             except ValueError:
                 # No more columns to cover; problem solved
                 yield [node.row_idx for node in solution]
