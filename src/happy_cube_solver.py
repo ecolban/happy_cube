@@ -5,16 +5,17 @@ from itertools import chain
 from random import shuffle
 from typing import ParamSpec, TypeVar
 
-# from rust_dlx_lib import DlxSolver
-from py_dlx_solver import DlxSolver
+from rust_dlx_lib import DlxSolver
+# from py_dlx_solver import DlxSolver
 
 from pads import PadsBase, PadsDublin
 from shapes import Shapes
 from time_guard import time_guard
 
 PieceSpec = tuple[PadsBase, int]
-HintSpec = tuple[int, PadsBase, int, str]
-SolutionSpec = list[tuple[int, PadsBase, int, str]]
+PieceAssignment = tuple[int, PadsBase, int, str]
+HintSpec = PieceAssignment
+SolutionSpec = Sequence[PieceAssignment]
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -32,9 +33,16 @@ class Orientations(Enum):
 
     def __init__(self, direction: int, offset: int) -> None:
         self._indexes = [(offset + direction * i) % 16 for i in range(16)]
+        self._direction = direction
+        self._offset = offset
 
     def apply_to(self, edge: list[int]) -> Iterator[int]:
         return (edge[i] for i in self._indexes)
+
+    def rotate(self, k):
+        sign = self._direction
+        return Orientations((sign, (self._offset - sign * k * 4) % 16))
+
 
 
 @cache
@@ -52,6 +60,31 @@ def get_edge(pad: PadsBase, index: int) -> list[int]:
         (int(lines[row_max][i] == c) for i in range(col_max, col_min, -1)),
         (int(lines[i][col_min] == c) for i in range(row_max, row_min, -1)),
     ))
+
+
+def print_edge(edge):
+    symbols = ['   ', ' ┌─', '─┐ ', '───', ' └─', ' │ ', '─┼─', '─┘ ']
+
+    e = edge
+    # @formatter:off
+    m = [
+        [0,     0,     0,     0,    0,    0, 0],
+        [0,  e[0],  e[1],  e[2], e[3], e[4], 0],
+        [0, e[15],     1,     1,    1, e[5], 0],
+        [0, e[14],     1,     1,    1, e[6], 0],
+        [0, e[13],     1,     1,    1, e[7], 0],
+        [0, e[12], e[11], e[10], e[9], e[8], 0],
+        [0,     0,     0,     0,    0,    0, 0],
+    ]
+    # @formatter:on
+
+    def c(i, j):
+        n = int(''.join(str(m[i - di][j - dj]) for di in (1, 0) for dj in (1, 0)), 2)
+        k = n if n <= 7 else 15 ^ n
+        return symbols[k]
+
+    for index in range(1, 7):
+        print(''.join(c(index, j) for j in range(7))[1:].rstrip())
 
 
 def get_shape_slots(
@@ -194,20 +227,18 @@ class Problem:
         self._pieces: Sequence[PieceSpec] = pieces
         self._slots: list[int] = get_shape_slots(shape, tack_stitches)
         self._hints: list[HintSpec] = hints
-        self._row_mapping = {}
-
-    def solve(self) -> Iterator[SolutionSpec]:
+        self._rows: list[list[int]] = []
+        self._row_mapping: dict[PieceAssignment, int] = {}
         pieces = [p for p in self._pieces]
         shuffle(pieces)
-        slots = set(self._slots)
-        columns = [True] * len(slots) + [False] * len(pieces)
-        rows = []
-        slot_map = {j: i for i, j in enumerate(slots)}
+        slot_map = {j: i for i, j in enumerate(set(self._slots))}
+        slots_len = len(slot_map.values())
         row_index = 0
+        row_len = slots_len + len(self._pieces)
         for tile in range(self._num_tiles):
             hint = next((h for h in self._hints if h[0] == tile), None)
             _, hint_pad, hint_index, hint_orientation = hint if hint else (None, None, None, None)
-            for piece_column, (pad, index) in enumerate(pieces, start=len(slots)):
+            for piece_column, (pad, index) in enumerate(pieces, start=slots_len):
                 if hint is not None and (pad, index) != (hint_pad, hint_index):
                     continue
                 edge = get_edge(pad, index)
@@ -215,20 +246,38 @@ class Problem:
                 for orientation in Orientations:
                     if hint is not None and orientation.name != hint_orientation:
                         continue
-                    edge_ = orientation.apply_to(edge)
-                    row = [0] * (len(slots) + len(pieces))
-                    for slot in (slot_map[self._slots[tile * 16 + i]] for i, cubit in enumerate(edge_)
-                                 if cubit == 1):
-                        row[slot] = 1
-                    row[piece_column] = 1
-                    if tuple(row) in rows_for_piece:
+                    row = self._make_row(row_len, slot_map, tile, orientation.apply_to(edge), piece_column)
+                    if row in rows_for_piece:
                         continue
-                    rows_for_piece.add(tuple(row))
-                    rows.append(row)
+                    rows_for_piece.add(row)
+                    self._rows.append(list(row))
                     self._row_mapping[(tile, pad, index, orientation.name)] = row_index
                     row_index += 1
-        clues = [self._row_mapping[hint] for hint in self._hints]
-        solver = DlxSolver(rows=rows, clues=clues)
+        self._shuffle_rows()
+        self._clues = [self._row_mapping[hint] for hint in self._hints]
+
+    def _make_row(self, row_len, slot_map, tile, edge, piece_column):
+        row = [0] * row_len
+        for i, cubit in enumerate(edge):
+            if cubit == 1:
+                row[slot_map[self._slots[tile * 16 + i]]] = 1
+        row[piece_column] = 1
+        return tuple(row)
+
+    def _shuffle_rows(self):
+        row_permutation = list(range(len(self._rows)))
+        shuffle(row_permutation)
+        rows = self._rows.copy()
+        row_mapping_ = {}
+        for t, i in self._row_mapping.items():
+            j: int = row_permutation[i]
+            rows[j] = self._rows[i]
+            row_mapping_[t] = j
+        self._rows = rows
+        self._row_mapping = row_mapping_
+
+    def solve(self) -> Iterator[SolutionSpec]:
+        solver = DlxSolver(rows=self._rows, clues=self._clues)
         for solution in solver:
             inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
             yield sorted(inv_row_mapping[i] for i in solution)
@@ -279,6 +328,14 @@ def solve_one(
         except TimeoutError:
             continue
     raise TimeoutError("Failed to solve within the allowed attempts")
+
+
+def print_solution(solution):
+    for tile, pad, index, orientation_str in solution:
+        print(f"Tile {tile}: {pad}[{index}]/{orientation_str}")
+        orientation = Orientations[orientation_str]
+        print_edge(list(orientation.apply_to(get_edge(pad, index))))
+        print()
 
 
 if __name__ == '__main__':

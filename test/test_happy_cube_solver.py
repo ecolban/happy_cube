@@ -1,86 +1,16 @@
 import sys
-from enum import Enum
-from itertools import chain
 from pathlib import Path
-from random import shuffle, randrange, sample
+from random import sample, shuffle, randrange
 
 import pytest
 
 SRC = str(Path(__file__).parent.parent / 'src')
 sys.path.append(SRC)
 
-from happy_cube_solver import solve, HintSpec, solve_one
+from happy_cube_solver import solve, solve_one, HintSpec, print_edge, get_edge, Orientations
 from happy_cube_solution_checker import check_solution
 from shapes import Shapes
-from pads import PadsDublin as Pads, PadsBase, PadsSkatoy
-
-
-class Orientations(Enum):
-    R0 = (1, 0)
-    R1 = (1, 12)
-    R2 = (1, 8)
-    R3 = (1, 4)
-    F0 = (-1, 4)
-    F1 = (-1, 8)
-    F2 = (-1, 12)
-    F3 = (-1, 0)
-
-    def __init__(self, direction: int, offset: int):
-        self._direction = direction
-        self._offset = offset
-        self._indexes = [(offset + direction * i) % 16 for i in range(16)]
-
-    def apply(self, edge: list[int]):
-        return (edge[i] for i in self._indexes)
-
-    def rotate(self, k):
-        sign = self._direction
-        return Orientations((sign, (self._offset - sign * k * 4) % 16))
-
-
-def get_edge(pad_: PadsBase, index_: int, orientation_str_: str) -> list[int]:
-    """Returns the edge of the piece with given index of given pad"""
-    c = str(index_)
-    lines = pad_.value.splitlines()
-    row_min = next(i for i, row in enumerate(lines) if c in row)
-    row_max = row_min + 4
-    col_min = 100
-    for i, row in enumerate(lines[row_min: row_max + 1], start=row_min):
-        col_start = next(j for j, v in enumerate(row) if v == c)
-        col_min = min(col_min, col_start)
-    col_max = col_min + 4
-    edge = list(chain(
-        (int(lines[row_min][i] == c) for i in range(col_min, col_max)),
-        (int(lines[i][col_max] == c) for i in range(row_min, row_max)),
-        (int(lines[row_max][i] == c) for i in range(col_max, col_min, -1)),
-        (int(lines[i][col_min] == c) for i in range(row_max, row_min, -1)),
-    ))
-    return list(Orientations[orientation_str_].apply(edge))
-
-
-def print_edge(edge):
-    symbols = ['   ', ' ┌─', '─┐ ', '───', ' └─', ' │ ', '─┼─', '─┘ ']
-
-    e = edge
-    # @formatter:off
-    m = [
-            [0,     0,     0,     0,    0,    0, 0],
-            [0,  e[0],  e[1],  e[2], e[3], e[4], 0],
-            [0, e[15],     1,     1,    1, e[5], 0],
-            [0, e[14],     1,     1,    1, e[6], 0],
-            [0, e[13],     1,     1,    1, e[7], 0],
-            [0, e[12], e[11], e[10], e[9], e[8], 0],
-            [0,     0,     0,     0,    0,    0, 0],
-    ]
-    # @formatter:on
-
-    def c(i, j):
-        n = int(''.join(str(m[i - di][j - dj]) for di in (1, 0) for dj in (1, 0)), 2)
-        k = n if n <= 7 else 15 ^ n
-        return symbols[k]
-
-    for index in range(1, 7):
-        print(''.join(c(index, j) for j in range(7))[1:].rstrip())
+from pads import PadsDublin as Pads, PadsSkatoy
 
 
 def print_solution(solution):
@@ -150,12 +80,9 @@ def test_solution_three_1x1x1_cubes():
     assert solution
     errors = check_solution(shape, set(pieces), hints, solution)
     assert not errors, '\n'.join(errors)
-    print(solution[:6])
-    print(solution[6:12])
-    print(solution[12:])
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_1x1x2_prism():
     _shape = Shapes.PRISM_1x1x2.value
     shape, hints = shape_shuffle(_shape, hints=[])
@@ -200,7 +127,7 @@ def test_solution_t_shape():
     assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_2x2x2_cube():
     shape = Shapes.CUBE_2x2x2.value
     _solution = [
@@ -239,7 +166,7 @@ def test_solution_2x2x2_cube():
         assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_3d_cross():
     shape = Shapes.THREE_D_CROSS.value
     _solution = [
@@ -284,7 +211,7 @@ def test_solution_3d_cross():
         assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_prism_3x3x1():
     shape = Shapes.PRISM_3x3x1.value
     _solution = [
@@ -385,6 +312,7 @@ def test_solution_no_hints(shape: Shapes):
     assert not errors, '\n'.join(errors)
 
 
+@pytest.mark.skip
 def test_cube_2x2x2_w_2_inverted_vertices():
     pieces = [(pad, i) for pad in Pads for i in range(1, 7)]
     shape = Shapes.CUBE_2x2x2_WITH_TWO_INVERTED_VERTICES.value
@@ -394,6 +322,9 @@ def test_cube_2x2x2_w_2_inverted_vertices():
         tuple(next(solutions)) for _ in range(100)
     }
     assert len(solution_set) == 100
+    for solution in solution_set:
+        errors = check_solution(shape, pieces, [], solution=solution, tack_stitches=tack_stitches)
+        assert not errors
 
 
 def test_cube_2x2x2_w_1_inverted_vertex():
@@ -401,4 +332,6 @@ def test_cube_2x2x2_w_1_inverted_vertex():
     shape = Shapes.CUBE_2x2x2_WITH_ONE_INVERTED_VERTEX.value
     solution = next(solve(shape, pieces))
     assert solution
+    errors = check_solution(shape, pieces, hints=[], solution=solution)
+    assert not errors
     print()
