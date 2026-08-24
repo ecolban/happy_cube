@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Iterable
 from enum import Enum
 from itertools import chain
 
@@ -8,7 +9,7 @@ from pads import PadsBase
 
 def check_solution(
     shape: list[tuple[int, int, int, int]],
-    pieces: set[PieceSpec],
+    pieces: Iterable[PieceSpec],
     hints: list[tuple[int, str, int, str]] | None,
     solution: SolutionSpec,
     tack_stitches: list[tuple[int, int]] | None = None,

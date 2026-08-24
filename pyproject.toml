@@ -9,6 +9,7 @@ dependencies = [
     "pytest",
     "pytest-asyncio",
     "rust-dlx-lib",
+    "aiohttp",
 ]
 
 [dependency-groups]
