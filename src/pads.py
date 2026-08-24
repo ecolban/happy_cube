@@ -42,18 +42,18 @@ class PadsBase(StrEnum):
 
     def __str__(self) -> str:
         symbols = {
-            0: '   ',
-            1: ' ┌─',
-            4: '─┐ ',
-            5: '───',
-            6: '─┬─',
-            16: ' └─',
-            17: ' │ ',
-            18: ' ├─',
-            21: '─┘ ',
-            25: '─┤ ',
-            26: '─┴─',
-            27: '─┼─',
+            int('0000', 4): '   ',
+            int('0001', 4): ' ┌─',
+            int('0010', 4): '─┐ ',
+            int('0011', 4): '───',
+            int('0012', 4): '─┬─',
+            int('0100', 4): ' └─',
+            int('0101', 4): ' │ ',
+            int('0102', 4): ' ├─',
+            int('0111', 4): '─┘ ',
+            int('0121', 4): '─┤ ',
+            int('0122', 4): '─┴─',
+            int('0123', 4): '─┼─',
         }
         matrix = self._matrix()
         w, h = len(matrix[0]), len(matrix)
@@ -225,6 +225,6 @@ class PadsDublin(PadsBase):
 
 
 if __name__ == '__main__':
-    for pad in PadsSkatoy:
+    for pad in PadsDublin:
         print(pad.name)
-        print(PadsSkatoy(pad))
+        print(pad)

@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from random import shuffle
 
 import pytest
 
@@ -28,4 +29,3 @@ def test_pad_str(pad: PadsBase):
     assert len(lines) == 12
     for line in lines:
         assert len(line) == 3 * 16
-
