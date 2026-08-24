@@ -150,12 +150,9 @@ def test_solution_three_1x1x1_cubes():
     assert solution
     errors = check_solution(shape, set(pieces), hints, solution)
     assert not errors, '\n'.join(errors)
-    print(solution[:6])
-    print(solution[6:12])
-    print(solution[12:])
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_1x1x2_prism():
     _shape = Shapes.PRISM_1x1x2.value
     shape, hints = shape_shuffle(_shape, hints=[])
@@ -200,7 +197,7 @@ def test_solution_t_shape():
     assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_2x2x2_cube():
     shape = Shapes.CUBE_2x2x2.value
     _solution = [
@@ -239,7 +236,7 @@ def test_solution_2x2x2_cube():
         assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_3d_cross():
     shape = Shapes.THREE_D_CROSS.value
     _solution = [
@@ -284,7 +281,7 @@ def test_solution_3d_cross():
         assert not errors, '\n'.join(errors)
 
 
-@pytest.mark.skipif(Pads == PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
+@pytest.mark.skipif(Pads is PadsSkatoy, reason='Cannot be solved with PadsSkatoy')
 def test_solution_prism_3x3x1():
     shape = Shapes.PRISM_3x3x1.value
     _solution = [
@@ -394,6 +391,9 @@ def test_cube_2x2x2_w_2_inverted_vertices():
         tuple(next(solutions)) for _ in range(100)
     }
     assert len(solution_set) == 100
+    for solution in solution_set:
+        errors = check_solution(shape, pieces, [], solution=solution, tack_stitches=tack_stitches)
+        assert not errors
 
 
 def test_cube_2x2x2_w_1_inverted_vertex():
@@ -401,4 +401,6 @@ def test_cube_2x2x2_w_1_inverted_vertex():
     shape = Shapes.CUBE_2x2x2_WITH_ONE_INVERTED_VERTEX.value
     solution = next(solve(shape, pieces))
     assert solution
+    errors = check_solution(shape, pieces, hints=[], solution=solution)
+    assert not errors
     print()

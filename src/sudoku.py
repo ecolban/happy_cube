@@ -16,12 +16,13 @@ def solve_sudoku(clues=None):
     """
 
     # 324 primary constraints
-    def make_rows() -> list[list[int]]:
-        offsets = [i * 9 * 9 for i in range(5)]
+    def create_matrix() -> list[list[int]]:
+        offsets = [i * 9 * 9 for i in range(4)]
+        num_cols = 4 * 9 * 9
 
         def make_row(row, col, val):  # val is 0-based
             box = row - row % 3 + col // 3
-            res = [0] * offsets[4]
+            res = [0] * num_cols
             res[offsets[0] + row * 9 + col] = 1  # cell constraint
             res[offsets[1] + row * 9 + val] = 1  # row constraint
             res[offsets[2] + col * 9 + val] = 1  # column constraint
@@ -29,14 +30,10 @@ def solve_sudoku(clues=None):
             return res
 
         # 9 * 9 * 9 candidate placements; index = r * 9 * 9 + c * 9 + d  (d is 0-based)
-        return [make_row(r, c, v) for r in range(9) for c in range(9) for v in range(9)]
+        return [make_row(r, c, d) for r in range(9) for c in range(9) for d in range(9)]
 
-    rows = make_rows()
+    rows = create_matrix()
 
-    # Pre-filled cells map directly to r indices
-    # clues = [row_idx(r, c, d)
-    #          for r, row in enumerate(grid)
-    #          for c, d in enumerate(row) if d]
     solutions = DlxSolver(rows, clues)
     return solutions
 
@@ -137,5 +134,4 @@ def _main(generate: int, retain: int):
 
 
 if __name__ == '__main__':
-    # _main()
-    main(10, 3)
+    _main()

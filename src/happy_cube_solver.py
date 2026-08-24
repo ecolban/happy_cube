@@ -5,16 +5,17 @@ from itertools import chain
 from random import shuffle
 from typing import ParamSpec, TypeVar
 
-# from rust_dlx_lib import DlxSolver
-from py_dlx_solver import DlxSolver
+from rust_dlx_lib import DlxSolver
+# from py_dlx_solver import DlxSolver
 
 from pads import PadsBase, PadsDublin
 from shapes import Shapes
 from time_guard import time_guard
 
 PieceSpec = tuple[PadsBase, int]
-HintSpec = tuple[int, PadsBase, int, str]
-SolutionSpec = list[tuple[int, PadsBase, int, str]]
+PieceAssignment = tuple[int, PadsBase, int, str]
+HintSpec = PieceAssignment
+SolutionSpec = Sequence[PieceAssignment]
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -194,7 +195,7 @@ class Problem:
         self._pieces: Sequence[PieceSpec] = pieces
         self._slots: list[int] = get_shape_slots(shape, tack_stitches)
         self._hints: list[HintSpec] = hints
-        self._row_mapping = {}
+        self._row_mapping: dict[PieceAssignment, int] = {}
 
     def solve(self) -> Iterator[SolutionSpec]:
         pieces = [p for p in self._pieces]
@@ -227,11 +228,27 @@ class Problem:
                     rows.append(row)
                     self._row_mapping[(tile, pad, index, orientation.name)] = row_index
                     row_index += 1
+        rows, self._row_mapping = randomize_(rows, self._row_mapping)
         clues = [self._row_mapping[hint] for hint in self._hints]
         solver = DlxSolver(rows=rows, clues=clues)
         for solution in solver:
             inv_row_mapping = {v: k for k, v in self._row_mapping.items()}
             yield sorted(inv_row_mapping[i] for i in solution)
+
+
+def randomize_(
+        rows: list[list[int]],
+        row_mapping: dict[PieceAssignment, int]
+) -> tuple[list[list[int]], dict[PieceAssignment, int]]:
+    row_permutation = list(range(len(rows)))
+    shuffle(row_permutation)
+    rows_ = rows.copy()
+    row_mapping_ = {}
+    for t, i in row_mapping.items():
+        j: int = row_permutation[i]
+        rows_[j] = rows[i]
+        row_mapping_[t] = j
+    return rows_, row_mapping_
 
 
 def solve(
