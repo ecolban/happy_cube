@@ -10,6 +10,7 @@ dependencies = [
     "pytest-asyncio",
     "rust-dlx-lib",
     "aiohttp",
+    "notebook>=7.6.3",
 ]
 
 [dependency-groups]

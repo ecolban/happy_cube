@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 # Rust build artifacts
 rust_dlx_lib/target/
+
+.ipynb_checkpoints/
